@@ -1,0 +1,303 @@
+<div class="reg-container">
+
+    <div class="reg-form-container">
+        <form id="skip-form" method="post" action="/skip" style="">
+            <div style="display: flex; flex-direction: row; justify-content: center; width: 100%;">
+                <button type="submit" class="reg-submit">Skip
+                    Project</button>
+            </div>
+        </form>
+        <form id="main-form" method="post">
+            <div style="display: flex; flex-direction: row; justify-content: center; width: 100%;">
+                <h1 id="form-title">Table Number: <span id="info" style="width: min-content; padding-right: 40px;">
+                        <%=currentTable%>
+                    </span>
+                </h1>
+                <h1 id="form-title">Room: <span id="info" style="width: min-content;">
+                        <%=roomNumber%>
+                    </span>
+                </h1>
+            </div>
+
+            <h1 id="form-title">Projects Judged: <span id="info" style="width: min-content;">
+                    <%=currentSlot%> / <%=totalProjects%>
+                </span>
+            </h1>
+            <h1 id="form-title">Project Name: <span id="info" style="width: min-content;">
+                    <%=currentProject%>
+                </span>
+            </h1>
+
+            <h1 id="form-title">Project Category: <span id="info-category" style="width: min-content;">
+                    <%=currentProjectCategory%>
+                </span>
+            </h1>
+            <div class="field-container">
+                <div class="field">
+                    <label class="field-label" for="score1">Innovation (0-10)</label>
+                    <ul>
+                        <li>Is this a new concept or a new approach to an existing concept?</li>
+                        <li>Is it an out-of-the box solution or is it creative in its solution approach?</li>
+                    </ul>
+                    <input type="number" name="score1" id="score1" min="0" max="10"
+                        placeholder="Enter a value between 0-10"
+                        onkeyup="if (value < 0) value = 0; else if (value > 10) value = 10;">
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="score2">Functionality (0-10)</label>
+                    <ul>
+                        <li>Does the project work as described?</li>
+                        <li>Is it a sound solution without significant bugs?</li>
+                        <li>How well does the project accomplish its stated goal?</li>
+                        <li>How is the design (UI, code readability)?</li>
+                        <li>How is the intractability of the project?</li>
+                    </ul>
+                    <input type="number" name="score2" id="score2" min="0" max="10"
+                        placeholder="Enter a value between 0-10"
+                        onkeyup="if (value < 0) value = 0; else if (value > 10) value = 10;">
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="score3">Practicality (0-5)</label>
+                    <ul>
+                        <li>How feasible is the solution in a real-world context?</li>
+                        <li>Are the required resources for a full-scale implementation justified for its potential
+                            impact?</li>
+                        <li>Is the project scalable to cater to a larger user base?</li>
+                    </ul>
+                    <input type="number" name="score3" id="score3" min="0" max="5"
+                        placeholder="Enter a value between 0-5"
+                        onkeyup="if (value < 0) value = 0; else if (value > 5) value = 5;">
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="score4">Presentation (0-10)</label>
+                    <ul>
+                        <li>How well do the presenters convey their ideas?</li>
+                        <li>Was there evident collaboration/team spirit?</li>
+                        <li>How clear was the goals/purpose of the project?</li>
+                    </ul>
+                    <input type="number" name="score4" id="score4" min="0" max="10"
+                        placeholder="Enter a value between 0-10"
+                        onkeyup="if (value < 0) value = 0; else if (value > 10) value = 10;">
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="score5">QnA (0-5)</label>
+                    <ul>
+                        <li>Was the team able to answer questions clearly and thoughtfully?</li>
+                        <li>Were the answers concise?</li>
+                    </ul>
+                    <input type="number" name="score5" id="score5" min="0" max="5"
+                        placeholder="Enter a value between 0-5"
+                        onkeyup="if (value < 0) value = 0; else if (value > 5) value = 5;">
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="score6">Category Fit (0-10)</label>
+                    <ul>
+                        <li>How well did the project fit into the certain category?</li>
+                    </ul>
+                    <input type="number" name="score6" id="score6" min="0" max="10"
+                        placeholder="Enter a value between 0-10"
+                        onkeyup="if (value < 0) value = 0; else if (value > 10) value = 10;">
+                </div>
+
+                <div class="field">
+                    <label class="field-label" for="comments">Any Comments?</label>
+                    <ul>
+                        <li>Category specific notes for deciding category winners (maybe give guiding questions?)</li>
+                        <li>Any general notes</li>
+                    </ul>
+                    <input type="text" value="Hi" name="comments" id="comments" placeholder="Enter some text">
+                </div>
+            </div>
+            <button type="submit" class="reg-submit">To Next Project →</button>
+        </form>
+    </div>
+</div>
+<script>
+    var notyf = new Notyf();
+    document.getElementById('main-form').addEventListener('submit', async (event) => {
+        console.log("Submit Detected")
+        event.preventDefault(); // Prevent the default form submission
+
+        // Get form values
+        const score1 = document.getElementById('score1').value;
+        const score2 = document.getElementById('score2').value;
+        const score3 = document.getElementById('score3').value;
+        const score4 = document.getElementById('score4').value;
+        const score5 = document.getElementById('score5').value;
+        const score6 = document.getElementById('score6').value;
+        const comments = document.getElementById('comments').value;
+        const tableNumber = "<%=currentTable%>";
+
+        // Check if all required fields are filled
+        if ([score1, score2, score3, score4, score5, score6].some(score => score === '') || comments === '') {
+            notyf.error('Please fill out all the scores and comments before submitting.');
+            return;
+        }
+        else {        // Create a FormData object for the POST request
+            const payload = {
+                score1: parseInt(score1),
+                score2: parseInt(score2),
+                score3: parseInt(score3),
+                score4: parseInt(score4),
+                score5: parseInt(score5),
+                score6: parseInt(score6),
+                comments: comments,
+                tableNumber: tableNumber
+            };
+
+            try {
+                // Send data using fetch with the form's action URL and method
+                const response = await fetch('/dashboard', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload),
+                    redirect: 'follow' // Allow following redirects
+                });
+
+                // If successful, redirect to the destination page
+                if (response.redirected) {
+                    window.location.href = response.url;
+                } else {
+                    const responseText = await response.text();
+                    console.log("Response:", responseText);
+                }
+            } catch (error) {
+                console.error('Error submitting form:', error);
+            }
+        }
+    });
+</script>
+
+<style>
+    .field ul {
+        margin-bottom: 15px;
+        text-wrap: wrap;
+        color: var(--white);
+    }
+
+    #form-title {
+        color: white;
+        font-size: 18pt;
+    }
+
+    #info {
+        color: var(--violet);
+        font-size: 18pt;
+        font-weight: 400;
+    }
+
+    #info-category {
+        color: var(--violet);
+        font-size: 18pt;
+        font-weight: 400;
+    }
+
+    .reg-submit {
+        background-color: var(--violet);
+        border: none;
+        color: white;
+        padding: 10px 20px;
+        text-align: center;
+        font-size: 24px;
+        border-radius: 10px;
+        margin: 40px 2px 4px;
+        cursor: pointer;
+        width: 250px;
+    }
+
+    .reg-container {
+        background-color: var(--black);
+        display: flex;
+        align-items: center;
+        justify-content: space-evenly;
+    }
+
+    .reg-form-container {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: left;
+    }
+
+    .reg-form-container form {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 30px;
+    }
+
+    .reg-form-container label {
+        color: var(--violet);
+        font-size: 25px;
+        margin-bottom: 0.8rem;
+    }
+
+    .reg-form-container h1 {
+        color: var(--violet);
+        text-align: center;
+        font-size: 52px;
+        font-weight: 400;
+        margin-bottom: 20px;
+    }
+
+    .field-container {
+        align-content: center;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        margin: 0 15% 0 15%;
+    }
+
+    .field {
+        margin-bottom: 1rem;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .field input {
+        transition: border-color 0.3s ease-out;
+        font-size: 16px;
+        padding: 0.8rem 1rem;
+        border: none;
+        outline: none;
+        background-color: transparent;
+        color: var(--white);
+        outline: 0;
+        border-width: 0 0 2px;
+        width: 30vw;
+        border: 2px solid var(--text);
+        outline: none;
+        border-radius: 15px;
+    }
+
+    .field input:focus {
+        border-color: var(--violet);
+    }
+
+    @media screen and (width < 798px) {
+        .reg-form-container {
+            width: 100vw;
+            margin: 0;
+        }
+
+        .reg-form-container form {
+            width: 90vw;
+            padding: 5vw;
+        }
+
+        .field,
+        .field input {
+            width: 90vw;
+        }
+    }
+</style>

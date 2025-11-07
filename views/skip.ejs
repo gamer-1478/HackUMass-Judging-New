@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skipped Projects - Judge Portal</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.js"></script>
+</head>
+
+<body>
+        <div class="page-container">
+            <div class="content-wrapper">
+                <h1 class="page-title">Skipped Projects</h1>
+                <p class="page-subtitle">Review and rejudge projects you've skipped</p>
+
+                <% if (skippedProjects && skippedProjects.length> 0) { %>
+                    <div class="table-container">
+                        <table class="projects-table">
+                            <thead>
+                                <tr>
+                                    <th>Project Name</th>
+                                    <th>Table Number</th>
+                                    <th>Room Number</th>
+                                    <th>Category</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% skippedProjects.forEach(project=> { %>
+                                    <tr>
+                                        <td data-label="Project Name">
+                                            <span class="project-name">
+                                                <%= project.name %>
+                                            </span>
+                                        </td>
+                                        <td data-label="Table Number">
+                                            <span class="table-badge">
+                                                <%= project.tableNumber %>
+                                            </span>
+                                        </td>
+                                        <td data-label="Room Number">
+                                            <span class="room-badge">
+                                                <%= project.roomNumber %>
+                                            </span>
+                                        </td>
+                                        <td data-label="Category">
+                                            <span class="category-tag">
+                                                <%= project.category %>
+                                            </span>
+                                        </td>
+                                        <td data-label="Action">
+                                            <button class="rejudge-btn" onclick="rejudgeProject('<%= project.tableNumber%>')">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                                                    viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                                </svg>
+                                                Rejudge
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <% }); %>
+                            </tbody>
+                        </table>
+                    </div>
+                <% } else { %>
+                    <div class="empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24"
+                            fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        <h2>No Skipped Projects</h2>
+                        <p>You haven't skipped any projects yet. Great job!</p>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+
+        <script>
+            var notyf = new Notyf();
+
+            async function rejudgeProject(projectId) {
+                window.location.href = `/rejudge/${projectId}`;
+                        }
+        </script>
+
+        <style>
+            :root {
+                --violet: #8b5cf6;
+                --black: #0a0a0a;
+                --white: #ffffff;
+                --text: #a0a0a0;
+            }
+
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                background-color: var(--black);
+                color: var(--white);
+                min-height: 100vh;
+            }
+
+            .page-container {
+                max-width: 1400px;
+                margin: 0 auto;
+                padding: 2rem;
+            }
+
+            .content-wrapper {
+                margin-top: 2rem;
+            }
+
+            .page-title {
+                color: var(--violet);
+                font-size: 48px;
+                font-weight: 600;
+                margin-bottom: 0.5rem;
+            }
+
+            .page-subtitle {
+                color: var(--text);
+                font-size: 18px;
+                margin-bottom: 2rem;
+            }
+
+            .table-container {
+                background-color: #1a1a1a;
+                border-radius: 12px;
+                overflow: hidden;
+                border: 2px solid #2a2a2a;
+            }
+
+            .projects-table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+
+            .projects-table thead {
+                background-color: var(--violet);
+            }
+
+            .projects-table th {
+                padding: 1.25rem 1.5rem;
+                text-align: left;
+                font-weight: 600;
+                font-size: 14px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                color: var(--white);
+            }
+
+            .projects-table tbody tr {
+                border-bottom: 1px solid #2a2a2a;
+                transition: background-color 0.2s ease;
+            }
+
+            .projects-table tbody tr:hover {
+                background-color: rgba(139, 92, 246, 0.05);
+            }
+
+            .projects-table tbody tr:last-child {
+                border-bottom: none;
+            }
+
+            .projects-table td {
+                padding: 1.25rem 1.5rem;
+                color: var(--white);
+            }
+
+            .project-name {
+                font-weight: 500;
+                font-size: 16px;
+            }
+
+            .table-badge,
+            .room-badge {
+                display: inline-block;
+                padding: 0.4rem 0.8rem;
+                background-color: rgba(139, 92, 246, 0.2);
+                color: var(--violet);
+                border-radius: 6px;
+                font-weight: 600;
+                font-size: 14px;
+            }
+
+            .category-tag {
+                display: inline-block;
+                padding: 0.4rem 0.8rem;
+                background-color: #2a2a2a;
+                color: var(--text);
+                border-radius: 6px;
+                font-size: 14px;
+            }
+
+            .rejudge-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.5rem;
+                background-color: var(--violet);
+                color: var(--white);
+                border: none;
+                padding: 0.6rem 1.2rem;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+
+            .rejudge-btn:hover {
+                background-color: #7c3aed;
+                transform: translateY(-1px);
+            }
+
+            .rejudge-btn:active {
+                transform: translateY(0);
+            }
+
+            .empty-state {
+                text-align: center;
+                padding: 4rem 2rem;
+                color: var(--text);
+            }
+
+            .empty-state svg {
+                margin-bottom: 1.5rem;
+                opacity: 0.5;
+            }
+
+            .empty-state h2 {
+                color: var(--white);
+                font-size: 24px;
+                margin-bottom: 0.5rem;
+            }
+
+            .empty-state p {
+                font-size: 16px;
+            }
+
+            /* Mobile Responsive */
+            @media screen and (max-width: 768px) {
+                .page-container {
+                    padding: 1rem;
+                }
+
+                .page-title {
+                    font-size: 32px;
+                }
+
+                .page-subtitle {
+                    font-size: 16px;
+                }
+
+                .table-container {
+                    border: none;
+                    background-color: transparent;
+                }
+
+                .projects-table thead {
+                    display: none;
+                }
+
+                .projects-table tbody tr {
+                    display: block;
+                    margin-bottom: 1rem;
+                    background-color: #1a1a1a;
+                    border-radius: 12px;
+                    border: 2px solid #2a2a2a;
+                    padding: 1rem;
+                }
+
+                .projects-table td {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 0.75rem 0;
+                    border-bottom: 1px solid #2a2a2a;
+                }
+
+                .projects-table td:last-child {
+                    border-bottom: none;
+                    justify-content: center;
+                    padding-top: 1rem;
+                }
+
+                .projects-table td::before {
+                    content: attr(data-label);
+                    font-weight: 600;
+                    color: var(--violet);
+                    font-size: 14px;
+                }
+
+                .projects-table td:last-child::before {
+                    display: none;
+                }
+
+                .rejudge-btn {
+                    width: 100%;
+                    justify-content: center;
+                }
+            }
+        </style>
+</body>
+
+</html>

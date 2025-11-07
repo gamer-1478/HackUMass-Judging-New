@@ -1,0 +1,400 @@
+<div class="page-container">
+    <div class="content-wrapper">
+        <div class="header-section">
+            <div>
+                <h1 class="page-title">Assignment Sheet</h1>
+                <p class="page-subtitle">Track your judging progress</p>
+            </div>
+            <div class="progress-card">
+                <div class="progress-stats">
+                    <div class="stat">
+                        <span class="stat-value">
+                            <%= judgedCount %>
+                        </span>
+                        <span class="stat-label">Judged</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat">
+                        <span class="stat-value">
+                            <%= totalAssigned %>
+                        </span>
+                        <span class="stat-label">Total</span>
+                    </div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: <%= (judgedCount / totalAssigned * 100) %>%"></div>
+                </div>
+            </div>
+        </div>
+
+        <% if (assignments && assignments.length> 0) { %>
+            <div class="table-container">
+                <table class="projects-table">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Project Name</th>
+                            <th>Table Number</th>
+                            <th>Room Number</th>
+                            <th>Category</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% assignments.forEach(project=> { %>
+                            <tr class="<%= project.judged ? 'judged' : 'pending' %>">
+                                <td data-label="Status">
+                                    <div class="status-indicator">
+                                        <% if (project.judged) { %>
+                                            <svg class="status-icon success" xmlns="http://www.w3.org/2000/svg"
+                                                width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                                stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                stroke-linejoin="round">
+                                                <polyline points="20 6 9 17 4 12"></polyline>
+                                            </svg>
+                                            <% } else { %>
+                                                <svg class="status-icon pending" xmlns="http://www.w3.org/2000/svg"
+                                                    width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                    stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                                </svg>
+                                                <% } %>
+                                    </div>
+                                </td>
+                                <td data-label="Project Name">
+                                    <span class="project-name">
+                                        <%= project.name %>
+                                    </span>
+                                </td>
+                                <td data-label="Table Number">
+                                    <span class="table-badge">
+                                        <%= project.tableNumber %>
+                                    </span>
+                                </td>
+                                <td data-label="Room Number">
+                                    <span class="room-badge">
+                                        <%= project.roomNumber %>
+                                    </span>
+                                </td>
+                                <td data-label="Category">
+                                    <span class="category-tag">
+                                        <%= project.category %>
+                                    </span>
+                                </td>
+                            </tr>
+                            <% }); %>
+                    </tbody>
+                </table>
+            </div>
+            <% } else { %>
+                <div class="empty-state">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                    <h2>No Assignments Yet</h2>
+                    <p>You don't have any projects assigned yet.</p>
+                </div>
+                <% } %>
+    </div>
+</div>
+
+<style>
+    :root {
+        --violet: #8b5cf6;
+        --black: #0a0a0a;
+        --white: #ffffff;
+        --text: #a0a0a0;
+        --success: #10b981;
+        --pending: #ef4444;
+    }
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        background-color: var(--black);
+        color: var(--white);
+        min-height: 100vh;
+    }
+
+    .page-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .content-wrapper {
+        margin-top: 2rem;
+    }
+
+    .header-section {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 2rem;
+        gap: 2rem;
+        flex-wrap: wrap;
+    }
+
+    .page-title {
+        color: var(--violet);
+        font-size: 48px;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+
+    .page-subtitle {
+        color: var(--text);
+        font-size: 18px;
+    }
+
+    .progress-card {
+        background-color: #1a1a1a;
+        border: 2px solid #2a2a2a;
+        border-radius: 12px;
+        padding: 1.5rem;
+        min-width: 280px;
+    }
+
+    .progress-stats {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .stat {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .stat-value {
+        font-size: 32px;
+        font-weight: 700;
+        color: var(--violet);
+    }
+
+    .stat-label {
+        font-size: 14px;
+        color: var(--text);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-divider {
+        width: 2px;
+        height: 40px;
+        background-color: #2a2a2a;
+    }
+
+    .progress-bar {
+        width: 100%;
+        height: 8px;
+        background-color: #2a2a2a;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--violet), #a78bfa);
+        transition: width 0.3s ease;
+    }
+
+    .table-container {
+        background-color: #1a1a1a;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 2px solid #2a2a2a;
+    }
+
+    .projects-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .projects-table thead {
+        background-color: var(--violet);
+    }
+
+    .projects-table th {
+        padding: 1.25rem 1.5rem;
+        text-align: left;
+        font-weight: 600;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--white);
+    }
+
+    .projects-table tbody tr {
+        border-bottom: 1px solid #2a2a2a;
+        transition: background-color 0.2s ease;
+    }
+
+    .projects-table tbody tr:hover {
+        background-color: rgba(139, 92, 246, 0.05);
+    }
+
+    .projects-table tbody tr:last-child {
+        border-bottom: none;
+    }
+
+    .projects-table tbody tr.judged {
+        opacity: 0.7;
+    }
+
+    .projects-table td {
+        padding: 1.25rem 1.5rem;
+        color: var(--white);
+    }
+
+    .status-indicator {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .status-icon {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        padding: 4px;
+    }
+
+    .status-icon.success {
+        background-color: rgba(16, 185, 129, 0.2);
+        color: var(--success);
+    }
+
+    .status-icon.pending {
+        background-color: rgba(239, 68, 68, 0.2);
+        color: var(--pending);
+    }
+
+    .project-name {
+        font-weight: 500;
+        font-size: 16px;
+    }
+
+    .table-badge,
+    .room-badge {
+        display: inline-block;
+        padding: 0.4rem 0.8rem;
+        background-color: rgba(139, 92, 246, 0.2);
+        color: var(--violet);
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    .category-tag {
+        display: inline-block;
+        padding: 0.4rem 0.8rem;
+        background-color: #2a2a2a;
+        color: var(--text);
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: var(--text);
+    }
+
+    .empty-state svg {
+        margin-bottom: 1.5rem;
+        opacity: 0.5;
+    }
+
+    .empty-state h2 {
+        color: var(--white);
+        font-size: 24px;
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+        font-size: 16px;
+    }
+
+    /* Mobile Responsive */
+    @media screen and (max-width: 768px) {
+        .page-container {
+            padding: 1rem;
+        }
+
+        .header-section {
+            flex-direction: column;
+        }
+
+        .page-title {
+            font-size: 32px;
+        }
+
+        .page-subtitle {
+            font-size: 16px;
+        }
+
+        .progress-card {
+            width: 100%;
+        }
+
+        .table-container {
+            border: none;
+            background-color: transparent;
+        }
+
+        .projects-table thead {
+            display: none;
+        }
+
+        .projects-table tbody tr {
+            display: block;
+            margin-bottom: 1rem;
+            background-color: #1a1a1a;
+            border-radius: 12px;
+            border: 2px solid #2a2a2a;
+            padding: 1rem;
+        }
+
+        .projects-table td {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #2a2a2a;
+        }
+
+        .projects-table td:last-child {
+            border-bottom: none;
+        }
+
+        .projects-table td::before {
+            content: attr(data-label);
+            font-weight: 600;
+            color: var(--violet);
+            font-size: 14px;
+        }
+
+        .projects-table td:first-child::before {
+            display: none;
+        }
+
+        .projects-table td:first-child {
+            justify-content: center;
+            border-bottom: 2px solid #2a2a2a;
+            padding-bottom: 1rem;
+            margin-bottom: 0.5rem;
+        }
+    }
+</style>

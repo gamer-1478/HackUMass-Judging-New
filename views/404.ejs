@@ -1,0 +1,45 @@
+<div class="reg-container">
+    <div class="reg-form-container">
+        <h1>404 Not Found</h1>
+    </div>
+</div>
+
+<style>
+    .reg-container {
+        background-color: var(--black);
+        display: flex;
+        align-items: center;
+        justify-content: space-evenly;
+        min-height: 100vh;
+        min-width: 100vw;
+    }
+
+    .reg-form-container {
+        padding: 1rem;
+        border-radius: 1rem;
+        display: flex;
+        flex-direction: row;
+        justify-content: center;
+        align-items: left;
+    }
+
+    .reg-form-container h1 {
+        color: var(--violet);
+        text-align: center;
+        font-size: 52px;
+        font-weight: 400;
+        margin-bottom: 20px;
+    }
+
+    @media screen and (width < 798px) {
+        .reg-form-container {
+            width: 90vw;
+            margin: 0;
+        }
+
+        .reg-form-container form {
+            width: 90vw;
+            padding: 5vw;
+        }
+    }
+</style>
