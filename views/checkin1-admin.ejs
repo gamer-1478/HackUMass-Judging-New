@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check-In Scanner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1625 0%, #2d1b3d 100%);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .header h1 {
+            color: white;
+            font-size: 32px;
+            font-weight: 700;
+        }
+
+        .scanner-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            max-height: 90vh;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            object-fit: cover;
+        }
+
+        .scan-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            border: 3px solid #10b981;
+            border-radius: 12px;
+            pointer-events: none;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+        }
+
+        .scan-corners {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #10b981;
+        }
+
+        .corner-tl {
+            top: -3px;
+            left: -3px;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        .corner-tr {
+            top: -3px;
+            right: -3px;
+            border-left: none;
+            border-bottom: none;
+        }
+
+        .corner-bl {
+            bottom: -3px;
+            left: -3px;
+            border-right: none;
+            border-top: none;
+        }
+
+        .corner-br {
+            bottom: -3px;
+            right: -3px;
+            border-left: none;
+            border-top: none;
+        }
+
+        .result-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            text-align: center;
+            min-width: 400px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 1000;
+        }
+
+        .result-modal.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -60%);
+            }
+
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%);
+            }
+        }
+
+        .result-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+
+        .result-modal h2 {
+            color: #7c3aed;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .table-display {
+            background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin: 20px 0;
+            font-size: 48px;
+            font-weight: 700;
+        }
+
+        .result-message {
+            color: #6b7280;
+            margin-top: 10px;
+            font-size: 16px;
+        }
+
+        .error-modal {
+            background: #fef2f2;
+            border: 2px solid #dc2626;
+        }
+
+        .error-modal h2 {
+            color: #dc2626;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #7c3aed;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>📸 Team Check-In</h1>
+    </div>
+
+    <div class="scanner-container">
+        <video id="video" autoplay playsinline></video>
+        <div class="scan-overlay">
+            <div class="scan-corners corner-tl"></div>
+            <div class="scan-corners corner-tr"></div>
+            <div class="scan-corners corner-bl"></div>
+            <div class="scan-corners corner-br"></div>
+        </div>
+    </div>
+
+    <div id="resultModal" class="result-modal">
+        <div class="result-icon" id="resultIcon">✅</div>
+        <h2 id="resultTitle">Check-In Successful!</h2>
+        <div class="table-display" id="tableDisplay">Table 42</div>
+        <p class="result-message" id="resultMessage">Email confirmation sent</p>
+    </div>
+
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <script>
+        const video = document.getElementById('video');
+        const resultModal = document.getElementById('resultModal');
+        const resultIcon = document.getElementById('resultIcon');
+        const resultTitle = document.getElementById('resultTitle');
+        const tableDisplay = document.getElementById('tableDisplay');
+        const resultMessage = document.getElementById('resultMessage');
+
+        let isProcessing = false;
+        let codeReader = null;
+
+        // Start camera
+        async function startScanner() {
+            try {
+                codeReader = new ZXing.BrowserQRCodeReader();
+                const devices = await codeReader.listVideoInputDevices();
+
+                if (devices.length === 0) {
+                    showError('No camera found');
+                    return;
+                }
+
+                // Use the first camera (usually back camera on mobile)
+                const selectedDevice = devices[0].deviceId;
+
+                codeReader.decodeFromVideoDevice(selectedDevice, 'video', async (result, err) => {
+                    if (result && !isProcessing) {
+                        isProcessing = true;
+                        await handleQRCode(result.text);
+                    }
+                });
+            } catch (err) {
+                console.error('Scanner error:', err);
+                showError('Failed to start camera');
+            }
+        }
+
+        async function handleQRCode(qrData) {
+            try {
+                const response = await fetch('/api/checkin1', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ qrData })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showSuccess(data.tableNumber, data.roomNumber, data.teamName);
+                } else {
+                    showError(data.message || 'Check-in failed');
+                }
+            } catch (err) {
+                console.error('Check-in error:', err);
+                showError('Connection error. Please try again.');
+            }
+
+            setTimeout(() => {
+                isProcessing = false;
+            }, 3000);
+        }
+
+        function showSuccess(tableNumber, roomNumber, teamName) {
+            resultModal.classList.remove('error-modal');
+            resultIcon.textContent = '✅';
+            resultTitle.textContent = `Welcome, ${teamName}!`;
+            tableDisplay.textContent = `Table ${tableNumber} - Room ${roomNumber}`;
+            resultMessage.textContent = 'Confirmation email sent. Please proceed to your table.';
+
+            resultModal.classList.add('show');
+
+            setTimeout(() => {
+                resultModal.classList.remove('show');
+            }, 3000);
+        }
+
+        function showError(message) {
+            resultModal.classList.add('error-modal');
+            resultIcon.textContent = '❌';
+            resultTitle.textContent = 'Check-In Failed';
+            tableDisplay.style.display = 'none';
+            resultMessage.textContent = message;
+
+            resultModal.classList.add('show');
+
+            setTimeout(() => {
+                resultModal.classList.remove('show');
+                tableDisplay.style.display = 'block';
+                isProcessing = false;
+            }, 3000);
+        }
+
+        // Start scanning when page loads
+        startScanner();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Judging Status - HackUMass XIII Leaderboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a0033 0%, #0f001a 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem 1rem;
+            background: rgba(139, 92, 246, 0.1);
+            border-radius: 1rem;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #a78bfa 0%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            color: #9ca3af;
+            font-size: 1.1rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .stat-card .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #a78bfa;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-card .stat-label {
+            color: #9ca3af;
+            font-size: 0.9rem;
+        }
+
+        .table-container {
+            background: rgba(30, 20, 50, 0.6);
+            border-radius: 1rem;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: rgba(139, 92, 246, 0.2);
+        }
+
+        th {
+            padding: 1.25rem 1.5rem;
+            text-align: left;
+            font-weight: 600;
+            color: #a78bfa;
+            font-size: 0.95rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 2px solid rgba(139, 92, 246, 0.3);
+        }
+
+        th:last-child {
+            text-align: center;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+            transition: background-color 0.2s ease;
+        }
+
+        tbody tr:hover {
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        tbody tr:last-child {
+            border-bottom: none;
+        }
+
+        td {
+            padding: 1.25rem 1.5rem;
+            color: #e0e0e0;
+        }
+
+        .team-name {
+            font-weight: 600;
+            font-size: 1.05rem;
+        }
+
+        .table-number {
+            color: #9ca3af;
+        }
+
+        .status-cell {
+            text-align: center;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .status-complete {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+
+        .status-partial {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.4);
+        }
+
+        .status-pending {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 0.5rem;
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 0.25rem;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #a78bfa 0%, #c084fc 100%);
+            border-radius: 0.25rem;
+            transition: width 0.3s ease;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem 0.5rem;
+            }
+
+            .header h1 {
+                font-size: 1.75rem;
+            }
+
+            .header p {
+                font-size: 0.95rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1rem;
+            }
+
+            .stat-card {
+                padding: 1rem;
+            }
+
+            .stat-card .stat-value {
+                font-size: 1.5rem;
+            }
+
+            table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+
+            th,
+            td {
+                padding: 1rem;
+                font-size: 0.9rem;
+            }
+
+            .status-badge {
+                padding: 0.4rem 0.75rem;
+                font-size: 0.85rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            thead {
+                display: none;
+            }
+
+            tbody,
+            tr,
+            td {
+                display: block;
+            }
+
+            tbody tr {
+                margin-bottom: 1.5rem;
+                background: rgba(30, 20, 50, 0.8);
+                border-radius: 0.75rem;
+                padding: 1rem;
+                border: 1px solid rgba(139, 92, 246, 0.3);
+            }
+
+            td {
+                padding: 0.75rem 0;
+                border: none;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            td::before {
+                content: attr(data-label);
+                font-weight: 600;
+                color: #a78bfa;
+                text-transform: uppercase;
+                font-size: 0.8rem;
+                letter-spacing: 0.05em;
+            }
+
+            .status-cell {
+                text-align: left;
+            }
+
+            .status-badge {
+                margin-left: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Judging Progress Board</h1>
+            <p>Real-time tracking of team evaluations</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">
+                    <%= teams.length %>
+                </div>
+                <div class="stat-label">Total Teams</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">
+                    <%= teams.filter(t=> t.judged >= t.total).length %>
+                </div>
+                <div class="stat-label">Fully Judged</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">
+                    <%= teams.filter(t=> t.judged > 0 && t.judged < t.total).length %>
+                </div>
+                <div class="stat-label">In Progress</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">
+                    <%= teams.filter(t=> t.judged === 0).length %>
+                </div>
+                <div class="stat-label">Awaiting Review</div>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Team Name</th>
+                        <th>Table #</th>
+                        <th>Room</th>
+                        <th>Judging Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% teams.forEach(team=> { %>
+                        <tr>
+                            <td data-label="Team Name" class="team-name">
+                                <%= team.name %>
+                            </td>
+                            <td data-label="Table #" class="table-number">
+                                <%= team.tableNumber %>
+                            </td>
+                            <td data-label="Room" class="table-number">
+                                <%= team.room %>
+                            </td>
+                            <td data-label="Status" class="status-cell">
+                                <div>
+                                    <span
+                                        class="status-badge <%= team.judged >= team.total ? 'status-complete' : team.judged > 0 ? 'status-partial' : 'status-pending' %>">
+                                        <%= team.judged %>/<%= team.total %> Evaluations Complete
+                                    </span>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill"
+                                            style="width: <%= (team.judged / team.total) * 100 %>%"></div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        <% }); %>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Auto-refresh every 30 seconds to keep data current
+        setTimeout(() => {
+            location.reload();
+        }, 30000);
+    </script>
+</body>
+
+</html>

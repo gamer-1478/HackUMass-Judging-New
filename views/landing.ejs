@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HackUMass XIII - Check-In System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a0033 0%, #0f001a 100%);
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+
+        .hero {
+            min-height: 70vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 4rem 1rem;
+            background: radial-gradient(circle at top right, rgba(139, 92, 246, 0.15), transparent 50%);
+        }
+
+        .hero-content {
+            max-width: 800px;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a78bfa 0%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1.5rem;
+            line-height: 1.2;
+        }
+
+        .hero p {
+            font-size: 1.3rem;
+            color: #9ca3af;
+            margin-bottom: 2.5rem;
+        }
+
+        .hero-cta {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(139, 92, 246, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(139, 92, 246, 0.1);
+            color: #a78bfa;
+            border: 2px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: rgba(139, 92, 246, 0.5);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 4rem 1rem;
+        }
+
+        .section {
+            margin-bottom: 4rem;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .section-header h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #a78bfa;
+            margin-bottom: 1rem;
+        }
+
+        .section-header p {
+            font-size: 1.1rem;
+            color: #9ca3af;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 3rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(180deg, #8b5cf6 0%, #7c3aed 100%);
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-bottom: 3rem;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -3.5rem;
+            top: 0.5rem;
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+            background: #8b5cf6;
+            border: 3px solid #1a0033;
+        }
+
+        .timeline-content {
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 1rem;
+            padding: 1.5rem;
+        }
+
+        .timeline-content h3 {
+            color: #a78bfa;
+            font-size: 1.4rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .timeline-content .step-number {
+            display: inline-block;
+            background: #8b5cf6;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+
+        .timeline-content p {
+            color: #d1d5db;
+            line-height: 1.7;
+            margin-bottom: 0.75rem;
+        }
+
+        .timeline-content .highlight {
+            background: rgba(139, 92, 246, 0.2);
+            border-left: 3px solid #8b5cf6;
+            padding: 0.75rem 1rem;
+            margin-top: 1rem;
+            border-radius: 0.5rem;
+        }
+
+        .timeline-content .highlight strong {
+            color: #a78bfa;
+        }
+
+        .submission-deadlines {
+            background: rgba(239, 68, 68, 0.1);
+            border: 2px solid rgba(239, 68, 68, 0.3);
+            border-radius: 1rem;
+            padding: 2rem;
+            max-width: 800px;
+            margin: 3rem auto;
+        }
+
+        .submission-deadlines h3 {
+            color: #f87171;
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .deadline-item {
+            background: rgba(239, 68, 68, 0.05);
+            border-radius: 0.75rem;
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .deadline-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .deadline-item h4 {
+            color: #fbbf24;
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .deadline-item p {
+            color: #d1d5db;
+            line-height: 1.7;
+        }
+
+        .deadline-item .time {
+            color: #f87171;
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .info-box {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .info-box p {
+            color: #93c5fd;
+            margin: 0;
+        }
+
+        .devpost-section {
+            background: rgba(139, 92, 246, 0.05);
+            border: 2px solid rgba(139, 92, 246, 0.2);
+            border-radius: 1rem;
+            padding: 2rem;
+            text-align: center;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .devpost-section h3 {
+            color: #a78bfa;
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .devpost-embed {
+            width: 100%;
+            height: 500px;
+            border: none;
+            border-radius: 0.75rem;
+            background: white;
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero p {
+                font-size: 1.1rem;
+            }
+
+            .hero-cta {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .btn {
+                justify-content: center;
+            }
+
+            .section-header h2 {
+                font-size: 2rem;
+            }
+
+            .timeline {
+                padding-left: 2rem;
+            }
+
+            .timeline-item::before {
+                left: -2.5rem;
+            }
+
+            .container {
+                padding: 2rem 1rem;
+            }
+
+            .devpost-embed {
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <%- include('partials/public-navbar', { currentPage: 'home' }) %>
+
+        <div class="hero">
+            <div class="hero-content">
+                <h1>Welcome to HackUMass XIII</h1>
+                <p>Your comprehensive guide to the judging check-in process and project submission deadlines</p>
+                <div class="hero-cta">
+                    <a href="/leaderboard" class="btn btn-primary">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="20" x2="12" y2="10"></line>
+                            <line x1="18" y1="20" x2="18" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="16"></line>
+                        </svg>
+                        View Judging Progress
+                    </a>
+                    <a href="https://hackumass-xiii.devpost.com" target="_blank" rel="noopener noreferrer"
+                        class="btn btn-secondary">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                            <polyline points="15 3 21 3 21 9"></polyline>
+                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                        </svg>
+                        Visit Devpost
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="section">
+                <div class="submission-deadlines">
+                    <h3>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        Important Submission Deadlines
+                    </h3>
+
+                    <div class="deadline-item">
+                        <h4>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <polyline points="9 11 12 14 22 4"></polyline>
+                                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                            </svg>
+                            Initial Project Submission
+                        </h4>
+                        <p><span class="time">Saturday, November 8th at 6:00 PM</span></p>
+                        <div class="info-box">
+                            <p><strong>Important:</strong> You MUST submit something by this time. This can be anything
+                                from an empty project repository to whatever progress you've made. The key is to submit
+                                - don't wait for perfection!</p>
+                        </div>
+                    </div>
+
+                    <div class="deadline-item">
+                        <h4>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                            </svg>
+                            Final Project Submission
+                        </h4>
+                        <p><span class="time">Sunday, November 9th at 10:00 AM</span></p>
+                        <div class="info-box">
+                            <p><strong>Final deadline:</strong> This is your last chance to update your project before
+                                judging begins. Make sure all your work is submitted and your Devpost is complete!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header">
+                    <h2>Two-Step Check-In Process</h2>
+                    <p>Follow these steps to complete your check-in and get ready for judging</p>
+                </div>
+
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <div class="timeline-content">
+                            <span class="step-number">Step 1</span>
+                            <h3>Check Your Email</h3>
+                            <p>You will receive an email containing:</p>
+                            <ul style="margin-left: 1.5rem; color: #d1d5db;">
+                                <li>A unique QR code for your team</li>
+                                <li>Instructions for the check-in process</li>
+                                <li>Important timing details</li>
+                            </ul>
+                            <div class="highlight">
+                                <strong>Save this email!</strong> You'll need the QR code for the next step.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="timeline-item">
+                        <div class="timeline-content">
+                            <span class="step-number">Step 2</span>
+                            <h3>Organizer Desk Check-In</h3>
+                            <p>Visit the organizer desk in front of the Organizer Room in the ILC to complete your first
+                                check-in.</p>
+                            <div class="highlight">
+                                <strong>When:</strong> Sunday, November 9th between 10:00 AM - 11:30 AM<br>
+                                <strong>Where:</strong> ILC - In front of Organizer Room<br>
+                                <strong>Bring:</strong> Your QR code from the email
+                            </div>
+                            <p style="margin-top: 1rem;">During this check-in:</p>
+                            <ul style="margin-left: 1.5rem; color: #d1d5db;">
+                                <li>Show your QR code to our scanner</li>
+                                <li>Receive your table and room assignment</li>
+                                <li>Get a confirmation email with your location details</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="timeline-item">
+                        <div class="timeline-content">
+                            <span class="step-number">Step 3</span>
+                            <h3>Table QR Code Scan</h3>
+                            <p>After receiving your table assignment, head to your designated table and complete the
+                                final check-in step.</p>
+                            <div class="highlight">
+                                <strong>Action Required:</strong> Use the link from your confirmation email to scan the
+                                QR code at your assigned table
+                            </div>
+                            <p style="margin-top: 1rem;">What to do:</p>
+                            <ul style="margin-left: 1.5rem; color: #d1d5db;">
+                                <li>Go to your assigned table and room</li>
+                                <li>Click the link in your confirmation email</li>
+                                <li>Scan the QR code displayed at your table</li>
+                                <li>You're all set for judging!</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="timeline-item">
+                        <div class="timeline-content">
+                            <span class="step-number">Step 4</span>
+                            <h3>You're Ready for Judging!</h3>
+                            <p>Once you've completed both check-ins, you're all set! Judges will visit your table during
+                                the judging period.</p>
+                            <div class="highlight">
+                                <strong>Pro Tips:</strong>
+                                <ul style="margin-left: 1.5rem; margin-top: 0.5rem; color: #d1d5db;">
+                                    <li>Have your demo ready to show</li>
+                                    <li>Prepare a brief explanation of your project</li>
+                                    <li>Be ready to answer questions about your work</li>
+                                    <li>Stay at your table during judging hours</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header">
+                    <h2>Submit Your Project on Devpost</h2>
+                    <p>Make sure to submit your project to the HackUMass XIII Devpost page</p>
+                </div>
+
+                <div class="devpost-section">
+                    <h3>HackUMass XIII on Devpost</h3>
+                    <iframe class="devpost-embed" src="https://hackumass-xiii.devpost.com/project-gallery"
+                        allowfullscreen>
+                    </iframe>
+                    <a href="https://hackumass-xiii.devpost.com" target="_blank" rel="noopener noreferrer"
+                        class="btn btn-primary" style="margin-top: 1.5rem;">
+                        Open Devpost in New Tab
+                    </a>
+                </div>
+            </div>
+        </div>
+</body>
+
+</html>

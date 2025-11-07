@@ -13,12 +13,16 @@ const path = require('node:path');
 const csv = require("csvtojson");
 const fs = require('fs');
 const { Parser } = require('json2csv');
+const nodemailer = require("nodemailer")
+const QRCode = require("qrcode")
+
 
 //file imports
 const authRouter = require('./routes/authRouter');
 const { ensureAuthenticated } = require("./middleware/auth.js");
 const userSchema = require("./schemas/userSchema.js");
 const projectSchema = require("./schemas/projectSchema.js");
+const teamSchema = require("./schemas/teamSchema.js");
 
 //prod stuff (DO NOT TOUCH)
 if (process.env.NODE_ENV === 'production') {
@@ -83,7 +87,7 @@ mongoose.connect(dbUri, { useNewUrlParser: true, useUnifiedTopology: true }).the
 //parse csv files
 var CsvfileJudges = ("./datafiles/judges_auth.csv");
 var CsvfileAssignments = ("./datafiles/assignments.csv");
-var CsvfileTeams = ("./datafiles/team.csv");
+var CsvfileTeams = ("./datafiles/CsvfileTeams.csv");
 CsvfileJudges = path.resolve(CsvfileJudges)
 CsvfileAssignments = path.resolve(CsvfileAssignments)
 CsvfileTeams = path.resolve(CsvfileTeams)
@@ -93,8 +97,96 @@ csv().fromFile(CsvfileTeams).then((jsonObj) => { CsvfileTeams = jsonObj })
 csv().fromFile(CsvfileJudges).then((jsonObj) => { CsvfileJudges = jsonObj })
 
 //routing
+
 app.get("/", (req, res) => {
-    res.redirect("/auth/login")
+    res.render("landing.ejs", { currentPage: "home" })
+})
+
+app.get("/leaderboard", async (req, res) => {
+    try {
+        // Get all completed judgements from database
+        const completedJudgements = await projectSchema.find()
+
+        // Create a map to count judgements per table
+        const judgementsPerTable = {}
+        completedJudgements.forEach((judgement) => {
+            const tableNum = judgement.teamTable
+            if (!judgementsPerTable[tableNum]) {
+                judgementsPerTable[tableNum] = 0
+            }
+            judgementsPerTable[tableNum]++
+        })
+
+        // Count total assignments per table
+        const assignmentsPerTable = {}
+        CsvfileAssignments.forEach((assignment) => {
+            // Skip header properties
+            if (assignment.Judge) {
+                // Loop through all slots for this judge
+                Object.keys(assignment).forEach((key) => {
+                    if (key.startsWith("Slot ")) {
+                        const slot = assignment[key]
+                        if (slot) {
+                            // Extract table number from slot (e.g., "mqv (Table 1)" -> "1")
+                            let tableNum = slot.substring(slot.indexOf(" ") + 1) // "(Table 1)"
+                            tableNum = tableNum.substring(tableNum.indexOf(" ") + 1) // "1)"
+                            tableNum = tableNum.replace(")", "") // "1"
+
+                            if (!assignmentsPerTable[tableNum]) {
+                                assignmentsPerTable[tableNum] = 0
+                            }
+                            assignmentsPerTable[tableNum]++
+                        }
+                    }
+                })
+            }
+        })
+
+        // Build leaderboard data
+        const leaderboardData = CsvfileTeams.map((team) => {
+            const tableNum = team.tableNumber
+            const completed = judgementsPerTable[tableNum] || 0
+            const total = assignmentsPerTable[tableNum] || 0
+
+            return {
+                teamName: team.teamName,
+                tableNumber: team.tableNumber,
+                roomNumber: team.roomNumber,
+                category: team.categoryApplied,
+                completed: completed,
+                total: total,
+                percentage: total > 0 ? Math.round((completed / total) * 100) : 0,
+            }
+        })
+
+        // Sort by completion percentage (highest first), then by completed count
+        leaderboardData.sort((a, b) => {
+            if (b.percentage !== a.percentage) {
+                return b.percentage - a.percentage
+            }
+            return b.completed - a.completed
+        })
+
+        // Calculate overall stats
+        const totalTeams = leaderboardData.length
+        const totalCompleted = leaderboardData.reduce((sum, team) => sum + team.completed, 0)
+        const totalAssignments = leaderboardData.reduce((sum, team) => sum + team.total, 0)
+        const fullyEvaluated = leaderboardData.filter((team) => team.completed === team.total && team.total > 0).length
+
+        res.render("leaderboard.ejs", {
+            teams: leaderboardData,
+            stats: {
+                totalTeams,
+                totalCompleted,
+                totalAssignments,
+                fullyEvaluated,
+            },
+            currentPage: "leaderboard",
+        })
+    } catch (error) {
+        console.error("Error generating leaderboard:", error)
+        res.redirect("/404")
+    }
 })
 
 app.use("/auth", authRouter);
@@ -133,7 +225,8 @@ app.get("/dashboard", ensureAuthenticated, async (req, res) => {
                     "currentSlot": currentSlot,
                     "totalProjects": totalProjects,
                     "roomNumber": currentTeam.roomNumber,
-                    "currentPage": "dashboard"
+                    "currentPage": "dashboard",
+                    "navbar": true
                 })
             }
         }
@@ -141,8 +234,8 @@ app.get("/dashboard", ensureAuthenticated, async (req, res) => {
 })
 
 app.post("/dashboard", ensureAuthenticated, async (req, res) => {
-    var { score1, score2, score3, score4, score5, score6, comments, tableNumber} = req.body;
-    
+    var { score1, score2, score3, score4, score5, score6, comments, tableNumber } = req.body;
+
     var CurrentJudge = await userSchema.findOne({ email: req.user.Judge_Email });
 
     var CurrentTeam = await CsvfileTeams.find(team => team.tableNumber == tableNumber);
@@ -209,16 +302,18 @@ app.get("/skipped", ensureAuthenticated, async (req, res) => {
 
     res.render("skip.ejs", {
         skippedProjects: skippedProjectsDetails,
-        currentPage: "skipped"
+        currentPage: "skipped",
+        navbar: true
     });
 })
 
 app.get("/assignment-sheet", ensureAuthenticated, async (req, res) => {
     var CurrentJudge = await userSchema.findOne({ email: req.user.Judge_Email });
     var ListOfAssignments = CsvfileAssignments.find(assignment => assignment.Judge === req.user.Judge);
-    console.log("Current Judge:", CurrentJudge);
     var assignmentsDetails = [];
-    for (let i = 1; i <= CurrentJudge.currentProject; i++) {
+
+    //instead of looping to the current project, loop through all assignments
+    for (let i = 1; i <= Object.keys(ListOfAssignments).length - 2; i++) {
         let slot = "Slot " + i;
         let currentSlot = ListOfAssignments[slot];
         if (currentSlot) {
@@ -227,7 +322,7 @@ app.get("/assignment-sheet", ensureAuthenticated, async (req, res) => {
             currentSlot = currentSlot.replace(")", ""); //1
 
             var CurrentTeam = CsvfileTeams.find(team => team.tableNumber == currentSlot);
-            console.log("Current Team for assignment:", CurrentTeam);
+
             assignmentsDetails.push({
                 name: CurrentTeam.teamName,
                 tableNumber: CurrentTeam.tableNumber,
@@ -242,7 +337,8 @@ app.get("/assignment-sheet", ensureAuthenticated, async (req, res) => {
         assignments: assignmentsDetails,
         judgedCount: CurrentJudge.judgedProjects.length,
         totalAssigned: assignmentsDetails.length,
-        currentPage: "assignment-sheet"
+        currentPage: "assignment-sheet",
+        navbar: true
     });
 })
 
@@ -257,7 +353,8 @@ app.get("/rejudge/:tableNumber", ensureAuthenticated, async (req, res) => {
         "currentSlot": tableNumber,
         "totalProjects": null,
         "roomNumber": currentTeam.roomNumber,
-        "currentPage": "dashboard"
+        "currentPage": "dashboard",
+        "navbar": true
     })
 })
 
@@ -297,12 +394,273 @@ app.get("/rejudge/:tableNumber", ensureAuthenticated, async (req, res) => {
 //     res.send("Hello")
 // })
 
+
 app.get("/404", (req, res) => {
-    res.render("404.ejs", {currentPage: "404"})
+    res.render("404.ejs", { currentPage: "404" })
 })
 
 app.get("/thankyou", (req, res) => {
-    res.render("thankyou.ejs", {currentPage: "thankyou"})
+    res.render("thankyou.ejs", { currentPage: "thankyou" })
+})
+
+const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+    },
+})
+
+app.get("/checkin1", ensureAuthenticated, (req, res) => {
+    res.render("checkin1-admin.ejs", { currentPage: "checkin1" })
+})
+
+app.post("/api/checkin1", ensureAuthenticated, async (req, res) => {
+    try {
+        const { qrData } = req.body
+
+        // Decode the base64 email from QR code
+        const projectEmail = Buffer.from(qrData, "base64").toString("utf-8")
+
+        // Find the team
+        const team = await teamSchema.findOne({ ProjectName: projectEmail })
+
+        if (!team) {
+            return res.json({ success: false, message: "Team not found" })
+        }
+
+        if (team.checkin1) {
+            return res.json({
+                success: false,
+                message: "Team already checked in",
+            })
+        }
+
+        // Get next available table/room number
+        const allTeams = await teamSchema.find({ checkin1: true }).sort({ TableNumber: 1 })
+        let nextTableNumber = 1
+        let nextRoomNumber = 1
+
+        // Find the highest assigned table number and increment
+        if (allTeams.length > 0) {
+            const lastTeam = allTeams[allTeams.length - 1]
+            nextTableNumber = (lastTeam.TableNumber || 0) + 1
+            // Assuming 10 tables per room, adjust as needed
+            nextRoomNumber = Math.ceil(nextTableNumber / 10)
+        }
+
+        // Update team with table/room assignment
+        team.TableNumber = nextTableNumber
+        team.RoomNumber = nextRoomNumber
+        team.checkin1 = true
+        await team.save()
+
+        const base64Email = Buffer.from(team.ProjectName).toString("base64")
+        const checkin2Link = `${process.env.BASE_URL || "http://localhost:3000"}/checkin2/${base64Email}`
+
+        const emailHtml = await ejs.renderFile(path.join(__dirname, "views", "emails", "table-assignment.ejs"), {
+            teamName: team.ProjectName,
+            tableNumber: nextTableNumber,
+            roomNumber: nextRoomNumber,
+            checkin2Link: checkin2Link,
+        })
+
+        await transporter.sendMail({
+            from: `"HackUMass XIII Team" <${process.env.EMAIL_USER}>`,
+            to: team.ProjectEmail,
+            subject: "✅ Check-In Complete - Your Table Assignment",
+            html: emailHtml,
+        })
+
+        console.log(`[v0] Team ${team.ProjectName} checked in - Table ${nextTableNumber}, Room ${nextRoomNumber}`)
+
+        res.json({
+            success: true,
+            tableNumber: nextTableNumber,
+            roomNumber: nextRoomNumber,
+            teamName: team.ProjectName,
+        })
+    } catch (error) {
+        console.error("[v0] Error in checkin1:", error)
+        res.json({ success: false, message: "Check-in failed. Please try again." })
+    }
+})
+
+app.get("/checkin2/:base64email", async (req, res) => {
+    try {
+        const { base64email } = req.params
+        const projectEmail = Buffer.from(base64email, "base64").toString("utf-8")
+
+        const team = await teamSchema.findOne({ ProjectName: projectEmail })
+
+        if (!team) {
+            return res.redirect("/404")
+        }
+
+        if (!team.checkin1) {
+            return res.render("error.ejs", {
+                message: "Please complete Check-In Step 1 at the Organizer Desk first.",
+                currentPage: "error",
+            })
+        }
+
+        if (team.checkin2) {
+            return res.render("success.ejs", {
+                message: "You have already completed check-in. Good luck with your project!",
+                currentPage: "success",
+            })
+        }
+
+        res.render("checkin2-participant.ejs", {
+            teamEmail: projectEmail,
+            teamName: team.ProjectName,
+            currentPage: "checkin2",
+        })
+    } catch (error) {
+        console.error("[v0] Error in checkin2 page:", error)
+        res.redirect("/404")
+    }
+})
+
+app.post("/api/checkin2", async (req, res) => {
+    try {
+        const { teamEmail, tableQRData } = req.body
+
+        const team = await teamSchema.findOne({ ProjectName: teamEmail })
+
+        if (!team) {
+            return res.json({ success: false, message: "Team not found" })
+        }
+
+        if (!team.checkin1) {
+            return res.json({
+                success: false,
+                message: "Please complete Step 1 check-in first",
+            })
+        }
+
+        if (team.checkin2) {
+            return res.json({
+                success: false,
+                message: "You have already completed this check-in",
+            })
+        }
+
+        // Verify the QR code matches the assigned table
+        // The table QR should contain table number info
+        const expectedTableData = `Table-${team.TableNumber}-Room-${team.RoomNumber}`
+
+        if (tableQRData !== expectedTableData) {
+            return res.json({
+                success: false,
+                message: `Wrong table! This is not Table ${team.TableNumber}`,
+            })
+        }
+
+        // Mark check-in 2 as complete
+        team.checkin2 = true
+        await team.save()
+
+        console.log(`[v0] Team ${team.ProjectName} completed check-in 2`)
+
+        res.json({
+            success: true,
+            message: "Check-in complete! You're all set. Good luck with your project!",
+        })
+    } catch (error) {
+        console.error("[v0] Error in checkin2 API:", error)
+        res.json({ success: false, message: "Check-in failed. Please try again." })
+    }
+})
+
+app.get("/uploadTeams", ensureAuthenticated, async (req, res) => {
+    try {
+        if (!CsvfileTeams || CsvfileTeams.length === 0) {
+            return res.status(500).json({
+                success: false,
+                message: "Team data not loaded. Please ensure team.csv is available.",
+            })
+        }
+
+        let successCount = 0
+        let skipCount = 0
+        let errorCount = 0
+
+        for (const team of CsvfileTeams) {
+            try {
+                const existingTeam = await teamSchema.findOne({ ProjectName: team.teamName })
+
+                if (existingTeam) {
+                    console.log(`[v0] Team ${team.teamName} already exists, skipping...`)
+                    skipCount++
+                    continue
+                }
+
+                const newTeam = await teamSchema.create({
+                    ProjectEmail: team.projectEmail,
+                    ProjectName: team.teamName,
+                    Category: team.categoryApplied,
+                    BegginerFriendly: team.beginnerFriendly === "TRUE" || team.beginnerFriendly === "true",
+                    TeamMembers: [],
+                })
+
+                const base64Email = Buffer.from(team.teamName).toString("base64")
+                const checkin2Link = `${process.env.BASE_URL || "http://localhost:3000"}/checkin2/${base64Email}`
+
+                const qrCodeBuffer = await QRCode.toBuffer(base64Email, {
+                    width: 300,
+                    margin: 2,
+                    color: {
+                        dark: "#7c3aed",
+                        light: "#ffffff",
+                    },
+                })
+
+                const emailHtml = await ejs.renderFile(path.join(__dirname, "views", "emails", "initial-team-invite.ejs"), {
+                    teamName: team.teamName,
+                    checkin2Link: checkin2Link,
+                })
+
+                await transporter.sendMail({
+                    from: `"HackUMass XII Team" <${process.env.EMAIL_USER}>`,
+                    to: team.projectEmail,
+                    subject: "🎯 HackUMass XIII Check-In Instructions - Action Required",
+                    html: emailHtml,
+                    attachments: [
+                        {
+                            filename: "checkin-qrcode.png",
+                            content: qrCodeBuffer,
+                            cid: "checkinQR", // Content ID for referencing in HTML
+                        },
+                    ],
+                })
+
+                console.log(`[v0] Successfully sent email to ${team.teamName} (${team.projectEmail})`)
+                successCount++
+            } catch (teamError) {
+                console.error(`[v0] Error processing team ${team.teamName}:`, teamError)
+                errorCount++
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `Teams processed: ${successCount} sent, ${skipCount} skipped, ${errorCount} errors`,
+            details: {
+                sent: successCount,
+                skipped: skipCount,
+                errors: errorCount,
+                total: CsvfileTeams.length,
+            },
+        })
+    } catch (error) {
+        console.error("[v0] Error in uploadTeams route:", error)
+        res.status(500).json({
+            success: false,
+            message: "Error processing teams",
+            error: error.message,
+        })
+    }
 })
 
 // // catch-all route: use '/*' so path-to-regexp treats it as a valid wildcard
