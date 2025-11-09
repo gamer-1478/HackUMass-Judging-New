@@ -38,7 +38,7 @@
         "mongoose": "^8.19.3",
         "nodemailer": "^7.0.10",
         "openai": "^6.8.1",
-        "passport": "^0.5.3",
+        "passport": "^0.6.0",
         "passport-local": "^1.0.0",
         "qrcode": "^1.5.4"
     }
