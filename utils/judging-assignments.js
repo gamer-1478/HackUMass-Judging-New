@@ -14,9 +14,8 @@ class Project {
 }
 
 class Judge {
-    constructor(firstName, lastName, judgeId) {
-        this.firstName = firstName
-        this.lastName = lastName
+    constructor(Name, judgeId) {
+        this.Name = Name
         this.judgeId = judgeId
     }
 }
@@ -107,8 +106,7 @@ class JudgingSystem {
 
         for (let i = 0; i < this.numJudges; i++) {
             const judge = new Judge(
-                firstNames[Math.floor(Math.random() * firstNames.length)],
-                lastNames[Math.floor(Math.random() * lastNames.length)],
+                firstNames[Math.floor(Math.random() * firstNames.length)] + " " + lastNames[Math.floor(Math.random() * lastNames.length)],
                 1001 + i,
             )
             judges.push(judge)
@@ -131,14 +129,14 @@ class JudgingSystem {
     }
 
     _loadJudgesFromCsv() {
-        const fileContent = fs.readFileSync("judges.csv", "utf-8")
+        const fileContent = fs.readFileSync("../datafiles/judges_auth.csv", "utf-8")
         const records = parse(fileContent, { columns: true, skip_empty_lines: true })
 
         this.numJudges = records.length
         const judges = []
 
         records.forEach((row, i) => {
-            const judge = new Judge(row.judgeFirstName, row.judgeLastName, 1001 + i)
+            const judge = new Judge(row.Judge, 1001 + i)
             judges.push(judge)
         })
 
@@ -485,7 +483,7 @@ class AssignmentGenerator {
         for (let i = 0; i < this.assignments.length; i++) {
             const judge = this.system.judges[i]
             const row = {
-                Judge: `${judge.firstName} ${judge.lastName}`,
+                Judge: `${judge.Name}`,
                 "Judge ID": judge.judgeId,
             }
 

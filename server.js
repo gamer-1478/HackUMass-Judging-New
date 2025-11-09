@@ -23,6 +23,7 @@ const { ensureAuthenticated } = require("./middleware/auth.js");
 const userSchema = require("./schemas/userSchema.js");
 const projectSchema = require("./schemas/projectSchema.js");
 const teamSchema = require("./schemas/teamSchema.js");
+const { table } = require("node:console");
 
 //prod stuff (DO NOT TOUCH)
 if (process.env.NODE_ENV === 'production') {
@@ -87,7 +88,7 @@ mongoose.connect(dbUri, { useNewUrlParser: true, useUnifiedTopology: true }).the
 //parse csv files
 var CsvfileJudges = ("./datafiles/judges_auth.csv");
 var CsvfileAssignments = ("./datafiles/assignments.csv");
-var CsvfileTeams = ("./datafiles/CsvfileTeams.csv");
+var CsvfileTeams = ("./datafiles/teamsFinal.csv");
 CsvfileJudges = path.resolve(CsvfileJudges)
 CsvfileAssignments = path.resolve(CsvfileAssignments)
 CsvfileTeams = path.resolve(CsvfileTeams)
@@ -415,75 +416,158 @@ app.get("/checkin1", ensureAuthenticated, (req, res) => {
     res.render("checkin1-admin.ejs", { currentPage: "checkin1" })
 })
 
-app.post("/api/checkin1", ensureAuthenticated, async (req, res) => {
-    try {
-        const { qrData } = req.body
+const ROOM_CONFIG = [
+    { roomNumber: 1, capacity: 49 }, // S131
+    { roomNumber: 2, capacity: 33 }, // S110
+    { roomNumber: 3, capacity: 33 }, // S120
+    { roomNumber: 4, capacity: 22 }, // N101
+    { roomNumber: 5, capacity: 40 }, // S140
+    { roomNumber: 6, capacity: 31 }, // Hardware room - last room
+]
 
-        // Decode the base64 email from QR code
-        const projectEmail = Buffer.from(qrData, "base64").toString("utf-8")
+// Helper function to check if project is hardware
+function isHardwareProject(category) {
+    if (!category) return false
+    const categoryLower = category.toLowerCase()
+    return categoryLower.includes("hardware") || categoryLower.includes("iot") || categoryLower.includes("robotics")
+}
 
-        // Find the team
-        const team = await teamSchema.findOne({ ProjectName: projectEmail })
-
-        if (!team) {
-            return res.json({ success: false, message: "Team not found" })
-        }
-
-        if (team.checkin1) {
-            return res.json({
-                success: false,
-                message: "Team already checked in",
+// Helper function to get next available table assignment
+async function getNextAvailableTable(isHardware, session) {
+    if (isHardware) {
+        const hardwareRoom = ROOM_CONFIG[ROOM_CONFIG.length - 1]
+        // Use session to ensure count is done within transaction
+        const teamsInHardwareRoom = await teamSchema
+            .countDocuments({
+                checkin1: true,
+                RoomNumber: hardwareRoom.roomNumber,
             })
+            .session(session)
+
+        if (teamsInHardwareRoom >= hardwareRoom.capacity) {
+            throw new Error("Hardware room is full. Please contact organizers.")
         }
 
-        // Get next available table/room number
-        const allTeams = await teamSchema.find({ checkin1: true }).sort({ TableNumber: 1 })
-        let nextTableNumber = 1
-        let nextRoomNumber = 1
-
-        // Find the highest assigned table number and increment
-        if (allTeams.length > 0) {
-            const lastTeam = allTeams[allTeams.length - 1]
-            nextTableNumber = (lastTeam.TableNumber || 0) + 1
-            // Assuming 10 tables per room, adjust as needed
-            nextRoomNumber = Math.ceil(nextTableNumber / 10)
+        return {
+            tableNumber: teamsInHardwareRoom + 1,
+            roomNumber: hardwareRoom.roomNumber,
         }
-
-        // Update team with table/room assignment
-        team.TableNumber = nextTableNumber
-        team.RoomNumber = nextRoomNumber
-        team.checkin1 = true
-        await team.save()
-
-        const base64Email = Buffer.from(team.ProjectName).toString("base64")
-        const checkin2Link = `${process.env.BASE_URL || "http://localhost:3000"}/checkin2/${base64Email}`
-
-        const emailHtml = await ejs.renderFile(path.join(__dirname, "views", "emails", "table-assignment.ejs"), {
-            teamName: team.ProjectName,
-            tableNumber: nextTableNumber,
-            roomNumber: nextRoomNumber,
-            checkin2Link: checkin2Link,
-        })
-
-        await transporter.sendMail({
-            from: `"HackUMass XIII Team" <${process.env.EMAIL_USER}>`,
-            to: team.ProjectEmail,
-            subject: "✅ Check-In Complete - Your Table Assignment",
-            html: emailHtml,
-        })
-
-        console.log(`[v0] Team ${team.ProjectName} checked in - Table ${nextTableNumber}, Room ${nextRoomNumber}`)
-
-        res.json({
-            success: true,
-            tableNumber: nextTableNumber,
-            roomNumber: nextRoomNumber,
-            teamName: team.ProjectName,
-        })
-    } catch (error) {
-        console.error("[v0] Error in checkin1:", error)
-        res.json({ success: false, message: "Check-in failed. Please try again." })
     }
+
+    const regularRooms = ROOM_CONFIG.slice(0, -1) // All rooms except last one
+
+    for (const room of regularRooms) {
+        // Use session to ensure count is done within transaction
+        const teamsInRoom = await teamSchema
+            .countDocuments({
+                checkin1: true,
+                RoomNumber: room.roomNumber,
+            })
+            .session(session)
+
+        if (teamsInRoom < room.capacity) {
+            return {
+                tableNumber: teamsInRoom + 1,
+                roomNumber: room.roomNumber,
+            }
+        }
+    }
+
+    throw new Error("All regular rooms are full. Please contact organizers.")
+}
+
+app.post("/api/checkin1", ensureAuthenticated, async (req, res) => {
+    const maxRetries = 3
+    let retryCount = 0
+
+    while (retryCount < maxRetries) {
+        const session = await mongoose.startSession()
+        session.startTransaction()
+
+        try {
+            const { qrData } = req.body
+
+            // Decode the base64 email from QR code
+            const projectEmail = Buffer.from(qrData, "base64").toString("utf-8")
+
+            const team = await teamSchema.findOne({ ProjectEmail: projectEmail }).session(session)
+
+            if (!team) {
+                await session.abortTransaction()
+                session.endSession()
+                return res.json({ success: false, message: "Team not found" })
+            }
+
+            if (team.checkin1) {
+                await session.abortTransaction()
+                session.endSession()
+                return res.json({
+                    success: false,
+                    message: "Team already checked in",
+                })
+            }
+
+            const isHardware = isHardwareProject(team.Category)
+            const assignment = await getNextAvailableTable(isHardware, session)
+
+            const duplicateCheck = await teamSchema
+                .findOne({
+                    RoomNumber: assignment.roomNumber,
+                    TableNumber: assignment.tableNumber,
+                    checkin1: true,
+                })
+                .session(session)
+
+            if (duplicateCheck) {
+                // Another team got this table, retry
+                await session.abortTransaction()
+                session.endSession()
+                retryCount++
+                console.log(`[v0] Duplicate table detected for ${team.ProjectName}, retrying... (${retryCount}/${maxRetries})`)
+                continue
+            }
+
+            team.TableNumber = assignment.tableNumber
+            team.RoomNumber = assignment.roomNumber
+            team.checkin1 = true
+            await team.save({ session })
+
+            // Commit the transaction
+            await session.commitTransaction()
+            session.endSession()
+
+
+            const base64Email = Buffer.from(team.ProjectEmail).toString("base64")
+            const checkin2Link = `${process.env.BASE_URL || "http://localhost:3000"}/checkin2/${base64Email}`
+
+            const emailHtml = await ejs.renderFile(path.join(__dirname, "views", "emails", "table-assignment.ejs"), {
+                teamName: team.ProjectName,
+                tableNumber: assignment.tableNumber,
+                roomNumber: assignment.roomNumber,
+                checkin2Link: checkin2Link,
+            })
+
+            await transporter.sendMail({
+                from: `"HackUMass XIII Team" <${process.env.EMAIL_USER}>`,
+                to: team.ProjectEmail,
+                subject: "✅ Check-In Complete - Your Table Assignment",
+                html: emailHtml,
+            })
+
+            console.log(`[v0] Team ${team.ProjectName} checked in - Table ${nextTableNumber}, Room ${nextRoomNumber}`)
+
+            res.json({
+                success: true,
+                tableNumber: nextTableNumber,
+                roomNumber: nextRoomNumber,
+                teamName: team.ProjectName,
+            })
+        } catch (error) {
+            console.error("[v0] Error in checkin1:", error)
+            res.json({ success: false, message: "Check-in failed. Please try again." })
+        }
+    }
+    return res.json({ success: false, message: "Check-in failed after multiple attempts. Please try again." })
 })
 
 app.get("/checkin2/:base64email", async (req, res) => {
@@ -514,6 +598,8 @@ app.get("/checkin2/:base64email", async (req, res) => {
         res.render("checkin2-participant.ejs", {
             teamEmail: projectEmail,
             teamName: team.ProjectName,
+            tableNumber: team.TableNumber,
+            roomNumber: team.RoomNumber,
             currentPage: "checkin2",
         })
     } catch (error) {
@@ -526,7 +612,7 @@ app.post("/api/checkin2", async (req, res) => {
     try {
         const { teamEmail, tableQRData } = req.body
 
-        const team = await teamSchema.findOne({ ProjectName: teamEmail })
+        const team = await teamSchema.findOne({ ProjectEmail: teamEmail })
 
         if (!team) {
             return res.json({ success: false, message: "Team not found" })
@@ -548,7 +634,7 @@ app.post("/api/checkin2", async (req, res) => {
 
         // Verify the QR code matches the assigned table
         // The table QR should contain table number info
-        const expectedTableData = `Table-${team.TableNumber}-Room-${team.RoomNumber}`
+        const expectedTableData = crypto.createHash('sha256').update(`Table ${team.TableNumber}`).digest('hex')
 
         if (tableQRData !== expectedTableData) {
             return res.json({
@@ -588,7 +674,7 @@ app.get("/uploadTeams", ensureAuthenticated, async (req, res) => {
 
         for (const team of CsvfileTeams) {
             try {
-                const existingTeam = await teamSchema.findOne({ ProjectName: team.teamName })
+                const existingTeam = await teamSchema.findOne({ ProjectName: team.teamName, ProjectEmail: team.projectEmail })
 
                 if (existingTeam) {
                     console.log(`[v0] Team ${team.teamName} already exists, skipping...`)
@@ -600,11 +686,21 @@ app.get("/uploadTeams", ensureAuthenticated, async (req, res) => {
                     ProjectEmail: team.projectEmail,
                     ProjectName: team.teamName,
                     Category: team.categoryApplied,
-                    BegginerFriendly: team.beginnerFriendly === "TRUE" || team.beginnerFriendly === "true",
-                    TeamMembers: [],
+                    LeadName: team.LeadFirst + " " + team.LeadLast,
+                    Mem1Name: team.TeamMem1First || "" + " " + team.TeamMem1Last || "",
+                    Mem2Name: team.TeamMem2First || "" + " " + team.TeamMem2Last || "",
+                    Mem3Name: team.TeamMem3First || "" + " " + team.TeamMem3Last || "",
+                    Mem4Name: team.TeamMem4First || "" + " " + team.TeamMem4Last || "",
+                    Mem1Email: team.TeamMem1Email || "",
+                    Mem2Email: team.TeamMem2Email || "",
+                    Mem3Email: team.TeamMem3Email || "",
+                    Mem4Email: team.TeamMem4Email || "",
+                    ProjectLink: team.SubUrl,
+                    checkin1: false,
+                    checkin2: true,
                 })
 
-                const base64Email = Buffer.from(team.teamName).toString("base64")
+                const base64Email = Buffer.from(team.projectEmail).toString("base64")
                 const checkin2Link = `${process.env.BASE_URL || "http://localhost:3000"}/checkin2/${base64Email}`
 
                 const qrCodeBuffer = await QRCode.toBuffer(base64Email, {
@@ -621,22 +717,34 @@ app.get("/uploadTeams", ensureAuthenticated, async (req, res) => {
                     checkin2Link: checkin2Link,
                 })
 
-                await transporter.sendMail({
-                    from: `"HackUMass XII Team" <${process.env.EMAIL_USER}>`,
-                    to: team.projectEmail,
-                    subject: "🎯 HackUMass XIII Check-In Instructions - Action Required",
-                    html: emailHtml,
-                    attachments: [
-                        {
-                            filename: "checkin-qrcode.png",
-                            content: qrCodeBuffer,
-                            cid: "checkinQR", // Content ID for referencing in HTML
-                        },
-                    ],
-                })
+                if (!transporter) {
+                    console.error("[v0] Email transporter not configured")
+                    errorCount++
+                    continue
+                }
 
-                console.log(`[v0] Successfully sent email to ${team.teamName} (${team.projectEmail})`)
-                successCount++
+                if (process.env.SEND_EMAILS == "FALSE") {
+                    console.log(`[v0] Email sending disabled. Skipping email for ${team.teamName}`)
+                    errorCount++
+                    continue
+                } else {
+                    await transporter.sendMail({
+                        from: `"HackUMass XII Team" <${process.env.EMAIL_USER}>`,
+                        to: team.projectEmail,
+                        subject: "🎯 HackUMass XIII Check-In Instructions - Action Required",
+                        html: emailHtml,
+                        attachments: [
+                            {
+                                filename: "checkin-qrcode.png",
+                                content: qrCodeBuffer,
+                                cid: "checkinQR", // Content ID for referencing in HTML
+                            },
+                        ],
+                    })
+                    console.log(`[v0] Successfully sent email to ${team.teamName} (${team.projectEmail})`)
+                    successCount++
+                }
+
             } catch (teamError) {
                 console.error(`[v0] Error processing team ${team.teamName}:`, teamError)
                 errorCount++
@@ -660,6 +768,30 @@ app.get("/uploadTeams", ensureAuthenticated, async (req, res) => {
             message: "Error processing teams",
             error: error.message,
         })
+    }
+})
+
+app.get("/download-teams-checkin2", ensureAuthenticated, async (req, res) => {
+    try {
+        const teams = await teamSchema.find({ checkin2: true })
+        const mappedTeams = teams.map(team => ({
+            teamName: team.ProjectName,
+            tableNumber: team.TableNumber,
+            categoryApplied: team.Category,
+            RoomNumber: team.RoomNumber
+        }))
+        const fields = ['teamName', 'tableNumber', 'categoryApplied', 'RoomNumber']
+        const json2csvParser = new Parser({ fields })
+        const csv = json2csvParser.parse(mappedTeams)
+
+        //save to datafiles folder
+        fs.writeFileSync(path.join(__dirname, 'datafiles', 'teams-checkin2.csv'), csv)
+        res.header('Content-Type', 'text/csv')
+        res.attachment('teams-checkin2.csv')
+        return res.send(csv)
+    } catch (error) {
+        console.error("[v0] Error in download-teams-checkin2 route:", error)
+        res.status(500).send("Error generating CSV")
     }
 })
 
