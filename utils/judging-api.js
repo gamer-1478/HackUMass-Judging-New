@@ -12,7 +12,7 @@
  * @param {number} config.numRooms Number of judging rooms
  * @param {Array} [config.roomCapacities] Optional array of capacities for each room
  * @param {number} [config.maxAttempts=10] Maximum retry attempts
- * @returns {Object} {success: boolean, assignments: {[judgeName]: number[]}, issues: string[]}
+ * @returns {Object} {success: boolean, assignments: [{name: string, assignments: number[]}], issues: string[]}
  */
 export function generateJudgingAssignments({
     teams,
@@ -22,6 +22,30 @@ export function generateJudgingAssignments({
     roomCapacities = null,
     maxAttempts = 10,
 }) {
+    if (!teams || !Array.isArray(teams) || teams.length === 0) {
+        return { success: false, assignments: [], issues: ["No teams provided"] }
+    }
+    if (!judges || !Array.isArray(judges) || judges.length === 0) {
+        return { success: false, assignments: [], issues: ["No judges provided"] }
+    }
+    if (!judgingsPerProject || judgingsPerProject < 1) {
+        return { success: false, assignments: [], issues: ["Invalid judgingsPerProject value"] }
+    }
+    if (!numRooms || numRooms < 1) {
+        return { success: false, assignments: [], issues: ["Invalid numRooms value"] }
+    }
+
+    const tableNumberToProject = {}
+    for (const team of teams) {
+        if (!team.tableNumber) {
+            return { success: false, assignments: [], issues: [`Team "${team.name}" missing tableNumber`] }
+        }
+        tableNumberToProject[team.tableNumber] = {
+            name: team.name,
+            tableNumber: team.tableNumber,
+        }
+    }
+
     // Initialize system
     const system = {
         judges: judges.map((j, idx) => ({
@@ -37,6 +61,7 @@ export function generateJudgingAssignments({
         numRooms,
         judgingsPerProject,
         roomCapacities,
+        tableNumberToProject, // Add mapping to system
     }
 
     // Create rooms
@@ -45,7 +70,7 @@ export function generateJudgingAssignments({
     console.log(`[v0] Initialized system with ${system.numJudges} judges and ${system.totalProjects} projects`)
     console.log("[v0] Room configuration:")
     for (const room of system.rooms) {
-        console.log(`  Room ${room.roomId}: ${room.projects.length} projects, capacity: ${room.capacity}`)
+        console.log(`  Room ${room.roomId}: tables ${room.projects.join(", ")}`)
     }
 
     let attempt = 1
@@ -90,13 +115,12 @@ export function generateJudgingAssignments({
     const output = []
     for (let i = 0; i < finalAssignments.length; i++) {
         const judge = system.judges[i]
-        const judgeName = `${judge.name}`
 
         // Filter out -1 (empty slots) and only return table numbers
         const tableNumbers = finalAssignments[i].filter((tableNum) => tableNum !== -1)
 
         output.push({
-            name: judgeName,
+            name: judge.name,
             assignments: tableNumbers,
         })
     }
@@ -115,40 +139,45 @@ export function generateJudgingAssignments({
 function createRooms(system) {
     const rooms = []
 
+    // Sort projects by table number to ensure proper ordering
+    const sortedProjects = [...system.projects].sort((a, b) => a.tableNumber - b.tableNumber)
+
     if (system.roomCapacities && system.roomCapacities.length === system.numRooms) {
-        let currentTableNumber = 1
+        // Use specified room capacities
+        let projectIndex = 0
 
         for (let i = 0; i < system.numRooms; i++) {
             const capacity = system.roomCapacities[i]
             const projectRange = []
 
-            for (let j = 0; j < capacity; j++) {
-                projectRange.push(currentTableNumber++)
+            for (let j = 0; j < capacity && projectIndex < sortedProjects.length; j++) {
+                projectRange.push(sortedProjects[projectIndex].tableNumber)
+                projectIndex++
             }
 
             rooms.push({
                 roomId: i + 1,
                 projects: projectRange,
-                capacity,
+                capacity: projectRange.length,
             })
         }
     } else {
+        // Divide projects evenly across rooms
         const projectsPerRoom = Math.ceil(system.totalProjects / system.numRooms)
 
         for (let i = 0; i < system.numRooms; i++) {
-            const startIdx = i * projectsPerRoom + 1
-            const endIdx = Math.min((i + 1) * projectsPerRoom + 1, system.totalProjects + 1)
+            const startIdx = i * projectsPerRoom
+            const endIdx = Math.min((i + 1) * projectsPerRoom, sortedProjects.length)
             const projectRange = []
 
             for (let j = startIdx; j < endIdx; j++) {
-                projectRange.push(j)
+                projectRange.push(sortedProjects[j].tableNumber)
             }
 
-            const capacity = projectRange.length
             rooms.push({
                 roomId: i + 1,
                 projects: projectRange,
-                capacity,
+                capacity: projectRange.length,
             })
         }
     }
@@ -174,8 +203,8 @@ class AssignmentGenerator {
         this.projectCounts = {}
         this.judgeCounts = {}
 
-        for (let i = 1; i <= system.totalProjects; i++) {
-            this.projectCounts[i] = 0
+        for (const project of system.projects) {
+            this.projectCounts[project.tableNumber] = 0
         }
         for (let i = 0; i < system.numJudges; i++) {
             this.judgeCounts[i] = 0
@@ -327,6 +356,10 @@ class AssignmentVerifier {
     _verifyJudgingCount() {
         const projectCounts = {}
 
+        for (const project of this.system.projects) {
+            projectCounts[project.tableNumber] = 0
+        }
+
         for (const judgeAssignments of this.assignments) {
             for (const tableNum of judgeAssignments) {
                 if (tableNum !== -1) {
@@ -337,28 +370,42 @@ class AssignmentVerifier {
 
         const issues = []
         const underJudgedProjects = []
-        for (let i = 1; i <= this.system.totalProjects; i++) {
-            const count = projectCounts[i] || 0
+        const overJudgedProjects = []
+
+        for (const project of this.system.projects) {
+            const tableNum = project.tableNumber
+            const count = projectCounts[tableNum] || 0
             if (count !== this.system.judgingsPerProject) {
-                issues.push(`Project ${i} is judged ${count} times (should be ${this.system.judgingsPerProject})`)
                 if (count < this.system.judgingsPerProject) {
+                    issues.push(
+                        `Table ${tableNum} (${project.name}) is judged ${count} times (should be ${this.system.judgingsPerProject})`,
+                    )
                     underJudgedProjects.push({
-                        projectId: i,
+                        projectId: tableNum,
                         current: count,
                         needed: this.system.judgingsPerProject - count,
+                    })
+                } else {
+                    issues.push(
+                        `Table ${tableNum} (${project.name}) is over-judged: ${count} times (should be ${this.system.judgingsPerProject})`,
+                    )
+                    overJudgedProjects.push({
+                        projectId: tableNum,
+                        current: count,
+                        excess: count - this.system.judgingsPerProject,
                     })
                 }
             }
         }
 
-        return { issues, underJudgedProjects }
+        return { issues, underJudgedProjects, overJudgedProjects }
     }
 
     _fixUnderJudgedProjects(underJudgedProjects) {
         console.log("\n[v0] Attempting to fix under-judged projects...")
 
         for (const { projectId, needed } of underJudgedProjects) {
-            console.log(`[v0] Fixing Project ${projectId} (needs ${needed} more judgement(s))`)
+            console.log(`[v0] Fixing Table ${projectId} (needs ${needed} more judgement(s))`)
 
             let addedCount = 0
 
@@ -386,7 +433,7 @@ class AssignmentVerifier {
                             judgeAssignments.push(projectId)
                         }
                         addedCount++
-                        console.log(`  ✓ Assigned Project ${projectId} to Judge ${judgeId + 1} at Slot ${slotIdx + 1}`)
+                        console.log(`  ✓ Assigned Table ${projectId} to Judge ${judgeId + 1} at Slot ${slotIdx + 1}`)
                         break
                     }
                 }
@@ -406,13 +453,13 @@ class AssignmentVerifier {
                     if (canAddNewSlot) {
                         judgeAssignments.push(projectId)
                         addedCount++
-                        console.log(`  ✓ Added Project ${projectId} to Judge ${judgeId + 1} as extra slot`)
+                        console.log(`  ✓ Added Table ${projectId} to Judge ${judgeId + 1} as extra slot`)
                     }
                 }
             }
 
             if (addedCount < needed) {
-                console.log(`  ⚠ Could only add ${addedCount}/${needed} missing judgement(s) for Project ${projectId}`)
+                console.log(`  ⚠ Could only add ${addedCount}/${needed} missing judgement(s) for Table ${projectId}`)
             }
         }
     }
@@ -441,7 +488,7 @@ class AssignmentVerifier {
 
             if (duplicates.size > 0) {
                 issues.push(
-                    `In Slot ${slotIdx + 1}, projects at tables ${Array.from(duplicates).join(", ")} are being judged simultaneously by multiple judges`,
+                    `In Slot ${slotIdx + 1}, tables ${Array.from(duplicates).join(", ")} are being judged simultaneously by multiple judges`,
                 )
             }
         }
@@ -457,7 +504,7 @@ class AssignmentVerifier {
             const firstSlot = this.assignments[i][0]
             if (firstSlot && firstSlot !== -1) {
                 const judge = this.system.judges[i]
-                const judgeName = `${judge.name}`
+                const judgeName = judge.name
 
                 if (firstSlotTables.has(firstSlot)) {
                     firstSlotTables.get(firstSlot).push(judgeName)
@@ -482,7 +529,7 @@ class AssignmentVerifier {
         for (let i = 0; i < this.assignments.length; i++) {
             const count = this.assignments[i].filter((t) => t !== -1).length
             const judge = this.system.judges[i]
-            const judgeName = `${judge.name}`
+            const judgeName = judge.name
             judgeCounts[judgeName] = count
         }
 
@@ -502,6 +549,16 @@ class AssignmentVerifier {
     verifyAll() {
         const issues = []
         const judgingResult = this._verifyJudgingCount()
+
+        if (judgingResult.overJudgedProjects.length > 0) {
+            issues.push(...judgingResult.issues)
+            return {
+                success: false,
+                issues,
+                assignments: this.assignments,
+            }
+        }
+
         issues.push(...judgingResult.issues)
         issues.push(...this._verifySimultaneousJudging())
         issues.push(...this._verifyNoJudgesStartAtSameTable())
@@ -512,9 +569,17 @@ class AssignmentVerifier {
 
             const recheck = this._verifyJudgingCount()
 
-            if (recheck.underJudgedProjects.length === 0) {
+            if (recheck.underJudgedProjects.length === 0 && recheck.overJudgedProjects.length === 0) {
                 console.log("[v0] ✓ Successfully fixed all under-judged projects!")
                 return { success: true, issues: [], assignments: this.assignments }
+            } else {
+                const remainingIssues = []
+                remainingIssues.push(...recheck.issues)
+                return {
+                    success: false,
+                    issues: remainingIssues,
+                    assignments: this.assignments,
+                }
             }
         }
 

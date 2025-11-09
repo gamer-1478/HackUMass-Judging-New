@@ -24,6 +24,8 @@ const { ensureAuthenticated } = require("./middleware/auth.js");
 const userSchema = require("./schemas/userSchema.js");
 const teamSchema = require("./schemas/teamSchema.js");
 const { generateJudgingAssignments } = require("./utils/judging-api.js");
+const projectSchema = require("./schemas/projectSchema.js");
+const { roomNumberToName } = require("./utils/helper.js");
 
 //prod stuff (DO NOT TOUCH)
 if (process.env.NODE_ENV === 'production') {
@@ -105,92 +107,89 @@ app.get("/", (req, res) => {
     res.render("landing.ejs", { currentPage: "home" })
 })
 
-// app.get("/leaderboard", async (req, res) => {
-//     try {
-//         // Get all completed judgements from database
-//         const completedJudgements = await projectSchema.find()
+app.get("/leaderboard", ensureAuthenticated, async (req, res) => {
+    try {
+        // Get all completed judgements from projectSchema
+        const completedJudgements = await projectSchema.find()
 
-//         // Create a map to count judgements per table
-//         const judgementsPerTable = {}
-//         completedJudgements.forEach((judgement) => {
-//             const tableNum = judgement.teamTable
-//             if (!judgementsPerTable[tableNum]) {
-//                 judgementsPerTable[tableNum] = 0
-//             }
-//             judgementsPerTable[tableNum]++
-//         })
+        // Count judgements per table number
+        const judgementsPerTable = {}
+        completedJudgements.forEach((judgement) => {
+            const tableNum = judgement.teamTable
+            if (!judgementsPerTable[tableNum]) {
+                judgementsPerTable[tableNum] = 0
+            }
+            judgementsPerTable[tableNum]++
+        })
 
-//         // Count total assignments per table
-//         const assignmentsPerTable = {}
-//         CsvfileAssignments.forEach((assignment) => {
-//             // Skip header properties
-//             if (assignment.Judge) {
-//                 // Loop through all slots for this judge
-//                 Object.keys(assignment).forEach((key) => {
-//                     if (key.startsWith("Slot ")) {
-//                         const slot = assignment[key]
-//                         if (slot) {
-//                             // Extract table number from slot (e.g., "mqv (Table 1)" -> "1")
-//                             let tableNum = slot.substring(slot.indexOf(" ") + 1) // "(Table 1)"
-//                             tableNum = tableNum.substring(tableNum.indexOf(" ") + 1) // "1)"
-//                             tableNum = tableNum.replace(")", "") // "1"
+        // Get all judges and count total assignments per table
+        const judges = await userSchema.find()
+        const assignmentsPerTable = {}
 
-//                             if (!assignmentsPerTable[tableNum]) {
-//                                 assignmentsPerTable[tableNum] = 0
-//                             }
-//                             assignmentsPerTable[tableNum]++
-//                         }
-//                     }
-//                 })
-//             }
-//         })
+        judges.forEach((judge) => {
+            if (judge.assignedProjects && judge.assignedProjects.length > 0) {
+                judge.assignedProjects.forEach((tableNum) => {
+                    if (!assignmentsPerTable[tableNum]) {
+                        assignmentsPerTable[tableNum] = 0
+                    }
+                    assignmentsPerTable[tableNum]++
+                })
+            }
+        })
 
-//         // Build leaderboard data
-//         const leaderboardData = CsvfileTeams.map((team) => {
-//             const tableNum = team.tableNumber
-//             const completed = judgementsPerTable[tableNum] || 0
-//             const total = assignmentsPerTable[tableNum] || 0
+        // Get all teams from teamSchema
+        const teams = await teamSchema.find({ checkin1: true, checkin2: true })
 
-//             return {
-//                 teamName: team.teamName,
-//                 tableNumber: team.tableNumber,
-//                 roomNumber: team.roomNumber,
-//                 category: team.categoryApplied,
-//                 completed: completed,
-//                 total: total,
-//                 percentage: total > 0 ? Math.round((completed / total) * 100) : 0,
-//             }
-//         })
+        // Build leaderboard data with team information
+        const leaderboardData = teams.map((team) => {
+            const tableNum = team.TableNumber?.toString()
+            const completed = judgementsPerTable[tableNum] || 0
+            const total = assignmentsPerTable[tableNum] || 0
 
-//         // Sort by completion percentage (highest first), then by completed count
-//         leaderboardData.sort((a, b) => {
-//             if (b.percentage !== a.percentage) {
-//                 return b.percentage - a.percentage
-//             }
-//             return b.completed - a.completed
-//         })
+            return {
+                name: team.ProjectName,
+                tableNumber: team.TableNumber,
+                room: roomNumberToName(team.RoomNumber),
+                category: team.Category,
+                completed: completed,
+                total: total,
+                percentage: total > 0 ? Math.round((completed / total) * 100) : 0,
+            }
+        })
 
-//         // Calculate overall stats
-//         const totalTeams = leaderboardData.length
-//         const totalCompleted = leaderboardData.reduce((sum, team) => sum + team.completed, 0)
-//         const totalAssignments = leaderboardData.reduce((sum, team) => sum + team.total, 0)
-//         const fullyEvaluated = leaderboardData.filter((team) => team.completed === team.total && team.total > 0).length
+        // Sort by completion percentage (highest first), then by completed count
+        leaderboardData.sort((a, b) => {
+            if (b.percentage !== a.percentage) {
+                return b.percentage - a.percentage
+            }
+            return b.completed - a.completed
+        })
 
-//         res.render("leaderboard.ejs", {
-//             teams: leaderboardData,
-//             stats: {
-//                 totalTeams,
-//                 totalCompleted,
-//                 totalAssignments,
-//                 fullyEvaluated,
-//             },
-//             currentPage: "leaderboard",
-//         })
-//     } catch (error) {
-//         console.error("Error generating leaderboard:", error)
-//         res.redirect("/404")
-//     }
-// })
+        // Calculate overall stats
+        const totalTeams = leaderboardData.length
+        const totalCompleted = leaderboardData.reduce((sum, team) => sum + team.completed, 0)
+        const totalAssignments = leaderboardData.reduce((sum, team) => sum + team.total, 0)
+        const fullyEvaluated = leaderboardData.filter((team) => team.completed === team.total && team.total > 0).length
+
+        res.render("leaderboard.ejs", {
+            teams: leaderboardData,
+            stats: {
+                totalTeams,
+                totalCompleted,
+                totalAssignments,
+                fullyEvaluated,
+            },
+            currentPage: "leaderboard",
+        })
+    } catch (error) {
+        console.error("[v0] Error generating leaderboard:", error)
+        res.status(500).json({
+            success: false,
+            message: "Error generating leaderboard",
+            error: error.message,
+        })
+    }
+})
 
 app.use("/auth", authRouter);
 app.use("/", dashboardRouter);
@@ -554,7 +553,128 @@ app.get("/checkin-has-failed", ensureAuthenticated, async (req, res) => {
 })
 
 app.get("/update-bias-scores", ensureAuthenticated, async (req, res) => {
-    res.send("Not implemented yet")
+    try {
+        const judges = await userSchema.find({ tutorialScores: { $exists: true, $ne: [] } })
+
+        if (judges.length === 0) {
+            return res.status(404).json({ message: "No judges found" })
+        }
+
+        // Find the maximum number of tutorial rounds across all judges
+        const maxTutorialRounds = Math.max(...judges.map((judge) => judge.tutorialScores?.length || 0))
+
+        if (maxTutorialRounds === 0) {
+            return res.status(400).json({ message: "No tutorial scores found" })
+        }
+
+        // Calculate bias for each judge
+        for (const judge of judges) {
+            const tutorialScores = judge.tutorialScores || []
+
+            if (tutorialScores.length === 0) {
+                continue // Skip judges with no tutorial scores
+            }
+
+            const generalBiases = []
+            const categoryBiases = []
+
+            // Process each tutorial round
+            for (let roundIndex = 0; roundIndex < tutorialScores.length; roundIndex++) {
+                // Calculate average of all judges for this round
+                const allJudgesGeneralAverages = []
+                const allJudgesCategoryScores = []
+
+                for (const otherJudge of judges) {
+                    const otherTutorialScores = otherJudge.tutorialScores || []
+
+                    if (otherTutorialScores.length > roundIndex) {
+                        const roundScores = otherTutorialScores[roundIndex]
+
+                        // Calculate general average (first 5 scores)
+                        const generalScores = [
+                            roundScores.score1,
+                            roundScores.score2,
+                            roundScores.score3,
+                            roundScores.score4,
+                            roundScores.score5,
+                        ].filter((score) => score != null)
+
+                        if (generalScores.length > 0) {
+                            const generalAvg = generalScores.reduce((sum, score) => sum + score, 0) / generalScores.length
+                            allJudgesGeneralAverages.push(generalAvg)
+                        }
+
+                        // Get category score (6th score)
+                        if (roundScores.score6 != null) {
+                            allJudgesCategoryScores.push(roundScores.score6)
+                        }
+                    }
+                }
+
+                // Calculate this judge's average for the round
+                const currentRoundScores = tutorialScores[roundIndex]
+                const judgeGeneralScores = [
+                    currentRoundScores.score1,
+                    currentRoundScores.score2,
+                    currentRoundScores.score3,
+                    currentRoundScores.score4,
+                    currentRoundScores.score5,
+                ].filter((score) => score != null)
+
+                // Calculate general bias for this round
+                if (judgeGeneralScores.length > 0 && allJudgesGeneralAverages.length > 0) {
+                    const judgeGeneralAvg = judgeGeneralScores.reduce((sum, score) => sum + score, 0) / judgeGeneralScores.length
+                    const overallGeneralAvg =
+                        allJudgesGeneralAverages.reduce((sum, avg) => sum + avg, 0) / allJudgesGeneralAverages.length
+
+                    // Bias = judge's average - overall average
+                    const generalBias = judgeGeneralAvg - overallGeneralAvg
+                    generalBiases.push(generalBias)
+                }
+
+                // Calculate category bias for this round
+                if (currentRoundScores.score6 != null && allJudgesCategoryScores.length > 0) {
+                    const judgeCategoryScore = currentRoundScores.score6
+                    const overallCategoryAvg =
+                        allJudgesCategoryScores.reduce((sum, score) => sum + score, 0) / allJudgesCategoryScores.length
+
+                    // Bias = judge's score - overall average
+                    const categoryBias = judgeCategoryScore - overallCategoryAvg
+                    categoryBiases.push(categoryBias)
+                }
+            }
+
+            // Calculate average bias across all tutorial rounds
+            const biasValueGeneral =
+                generalBiases.length > 0 ? generalBiases.reduce((sum, bias) => sum + bias, 0) / generalBiases.length : 0
+
+            const biasValueCategory =
+                categoryBiases.length > 0 ? categoryBiases.reduce((sum, bias) => sum + bias, 0) / categoryBiases.length : 0
+
+            // Update the judge's bias values
+            await User.updateOne(
+                { _id: judge._id },
+                {
+                    $set: {
+                        biasValueGeneral: biasValueGeneral,
+                        biasValueCategory: biasValueCategory,
+                    },
+                },
+            )
+
+            console.log(
+                `[v0] Updated bias for judge ${judge.name}: General=${biasValueGeneral.toFixed(3)}, Category=${biasValueCategory.toFixed(3)}`,
+            )
+        }
+
+        res.json({
+            message: "Bias scores updated successfully",
+            judgesUpdated: judges.length,
+        })
+    } catch (error) {
+        console.error("[v0] Error updating bias scores:", error)
+        res.status(500).json({ message: "Error updating bias scores", error: error.message })
+    }
 })
 
 // // catch-all route: use '/*' so path-to-regexp treats it as a valid wildcard

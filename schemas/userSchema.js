@@ -33,7 +33,8 @@ const userSchema = new mongoose.Schema({
     assignedProjects: { type: Array, default: [] },
     judgedProjects: { type: Array, default: [] },
     skippedProjects: { type: Array, default: [] },
-    biasValue: nonreqNumber,
+    biasValueGeneral: nonreqNumber,
+    biasValueCategory: nonreqNumber,
     tutorialCurrentProject: { type: Number, default: 1, required: true },
     tutorialScores: { type: [tutorialScoresSchema], default: [] }
 })
