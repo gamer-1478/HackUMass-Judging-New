@@ -137,7 +137,7 @@ class JudgingSystem {
         const judges = []
 
         records.forEach((row, i) => {
-            const judge = new Judge(row.judgeFirstName, row.judgeLastName, 1001 + i)
+            const judge = new Judge(row.Judge, 1001 + i)
             judges.push(judge)
         })
 
@@ -777,11 +777,11 @@ function main({
 
 // Example usage with feature flags
 main({
-    demoMode: true, // Toggle demo mode on/off
+    demoMode: false, // Toggle demo mode on/off
     judgingsPerProject: 3, // Number of times each project is judged
     numRooms: 4, // Number of judging rooms
-    numJudges: 20, // Number of judges (used in demo mode)
-    totalProjects: 50, // Total number of projects (used in demo mode)
+    numJudges: 3, // Number of judges (used in demo mode)
+    totalProjects: 12, // Total number of projects (used in demo mode)
     // Rooms with more projects can accommodate more judges at once
     roomCapacities: [15, 12, 13, 10], // Optional: Projects per room (if omitted, divided evenly)
     maxAttempts: 10, // Maximum retry attempts

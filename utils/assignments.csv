@@ -1,21 +1,4 @@
-Judge,Judge ID,Slot 1,Slot 2,Slot 3,Slot 4,Slot 5,Slot 6,Slot 7,Slot 8
-Robert Lopez,1001,wry (Table 14),ykq (Table 15),gan (Table 27),kjk (Table 28),swm (Table 40),rnc (Table 41),nyu (Table 1),wbm (Table 2)
-Sarah Jones,1002,ivw (Table 16),bcv (Table 17),jpj (Table 29),tcd (Table 30),hui (Table 42),bbo (Table 43),ngg (Table 3),qnv (Table 4)
-Jane Martinez,1003,clr (Table 5),doj (Table 6),gei (Table 18),zbs (Table 19),uac (Table 31),lnz (Table 32),bav (Table 44),neq (Table 45)
-Linda Martinez,1004,ael (Table 7),ptk (Table 8),bbm (Table 20),pbu (Table 21),akw (Table 33),umw (Table 34),bit (Table 46),vzv (Table 47)
-Jane Hernandez,1005,avl (Table 9),eeo (Table 10),hwp (Table 22),hmu (Table 23),vne (Table 35),fus (Table 36),mxz (Table 48),kbs (Table 49)
-Sarah Williams,1006,ugz (Table 24),rqt (Table 25),dgb (Table 37),wmj (Table 38),kpg (Table 50),swm (Table 40),gei (Table 11),smg (Table 12)
-Thomas Martinez,1007,stm (Table 26),wry (Table 14),ica (Table 39),gan (Table 27),rnc (Table 41),hui (Table 42),nqn (Table 13),nyu (Table 1)
-Michael Brown,1008,kjk (Table 28),jpj (Table 29),bbo (Table 43),bav (Table 44),wbm (Table 2),ngg (Table 3),ykq (Table 15),ivw (Table 16)
-Sarah Johnson,1009,neq (Table 45),bit (Table 46),qnv (Table 4),clr (Table 5),bcv (Table 17),gei (Table 18),tcd (Table 30),uac (Table 31)
-Mary Jones,1010,vzv (Table 47),mxz (Table 48),doj (Table 6),ael (Table 7),zbs (Table 19),bbm (Table 20),lnz (Table 32),akw (Table 33)
-Thomas Martinez,1011,pbu (Table 21),hwp (Table 22),umw (Table 34),vne (Table 35),kbs (Table 49),kpg (Table 50),ptk (Table 8),No team for this time slot
-John Martinez,1012,fus (Table 36),dgb (Table 37),swm (Table 40),rnc (Table 41),avl (Table 9),eeo (Table 10),hmu (Table 23),No team for this time slot
-Robert Hernandez,1013,rqt (Table 25),ugz (Table 24),wmj (Table 38),ica (Table 39),bbo (Table 43),bav (Table 44),smg (Table 12),No team for this time slot
-Robert Brown,1014,ykq (Table 15),stm (Table 26),kjk (Table 28),jpj (Table 29),neq (Table 45),bit (Table 46),wbm (Table 2),No team for this time slot
-John Lopez,1015,hui (Table 42),vzv (Table 47),gei (Table 11),nqn (Table 13),wry (Table 14),ivw (Table 16),gan (Table 27),No team for this time slot
-Linda Gonzalez,1016,tcd (Table 30),uac (Table 31),mxz (Table 48),kbs (Table 49),nyu (Table 1),qnv (Table 4),bcv (Table 17),No team for this time slot
-Linda Williams,1017,kpg (Table 50),ngg (Table 3),clr (Table 5),doj (Table 6),gei (Table 18),zbs (Table 19),akw (Table 33),No team for this time slot
-John Lopez,1018,ptk (Table 8),ael (Table 7),pbu (Table 21),bbm (Table 20),lnz (Table 32),vne (Table 35),avl (Table 9),No team for this time slot
-John Wilson,1019,eeo (Table 10),gei (Table 11),smg (Table 12),hwp (Table 22),hmu (Table 23),ugz (Table 24),umw (Table 34),No team for this time slot
-David Williams,1020,nqn (Table 13),fus (Table 36),rqt (Table 25),stm (Table 26),dgb (Table 37),wmj (Table 38),ica (Table 39),No team for this time slot
+Judge,Judge ID,Slot 1,Slot 2,Slot 3,Slot 4,Slot 5,Slot 6,Slot 7,Slot 8,Slot 9,Slot 10,Slot 11
+Aayush Garg  1001,,SolarTruth (Table 1),SolaTruth (Table 2),SolTruth (Table 3),SoTruth (Table 4),SoarTruth (Table 5),SolarTruh (Table 6),SolarTrth (Table 7),SolaTuth (Table 8),Solarruth (Table 9),SolarTrut (Table 10),SolarTrut (Table 11)
+Sathvik Yadanaparthi 1002,,SolaTruth (Table 2),SolarTruth (Table 1),SoTruth (Table 4),SolTruth (Table 3),SolarTruh (Table 6),SoarTruth (Table 5),SolaTuth (Table 8),SolarTrth (Table 7),SolarTrut (Table 10),Solarruth (Table 9),SolarTruth (Table 1)
+Shreyas Donti 1003,,SolarTrut (Table 11),SolTruth (Table 3),SolaTruth (Table 2),SoarTruth (Table 5),SoTruth (Table 4),SolarTrth (Table 7),SolarTruh (Table 6),Solarruth (Table 9),SolaTuth (Table 8),SolarTrut (Table 11),SolarTrut (Table 10)
