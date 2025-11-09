@@ -694,6 +694,7 @@ app.get("/uploadTeams", ensureAuthenticated, async (req, res) => {
                     Mem3Email: team.TeamMem3Email || "",
                     Mem4Email: team.TeamMem4Email || "",
                     ProjectLink: team.SubUrl,
+                    HardwareJudge: team.HardwareJudge == "true" ? true : false || false,
                     checkin1: false,
                     checkin2: false,
                 })

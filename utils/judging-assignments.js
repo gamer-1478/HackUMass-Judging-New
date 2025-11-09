@@ -14,8 +14,9 @@ class Project {
 }
 
 class Judge {
-    constructor(Name, judgeId) {
-        this.Name = Name
+    constructor(firstName, lastName, judgeId) {
+        this.firstName = firstName
+        this.lastName = lastName
         this.judgeId = judgeId
     }
 }
@@ -24,8 +25,7 @@ class Room {
     constructor(roomId, projects, capacity = null) {
         this.roomId = roomId
         this.projects = projects
-        // Capacity represents max number of judges that can fit in this room at once
-        // If not specified, defaults to the number of projects in the room
+        // This determines how much space/how many tables are in the room
         this.capacity = capacity !== null ? capacity : projects.length
     }
 }
@@ -106,7 +106,8 @@ class JudgingSystem {
 
         for (let i = 0; i < this.numJudges; i++) {
             const judge = new Judge(
-                firstNames[Math.floor(Math.random() * firstNames.length)] + " " + lastNames[Math.floor(Math.random() * lastNames.length)],
+                firstNames[Math.floor(Math.random() * firstNames.length)],
+                lastNames[Math.floor(Math.random() * lastNames.length)],
                 1001 + i,
             )
             judges.push(judge)
@@ -129,14 +130,14 @@ class JudgingSystem {
     }
 
     _loadJudgesFromCsv() {
-        const fileContent = fs.readFileSync("../datafiles/judges_auth.csv", "utf-8")
+        const fileContent = fs.readFileSync("judges.csv", "utf-8")
         const records = parse(fileContent, { columns: true, skip_empty_lines: true })
 
         this.numJudges = records.length
         const judges = []
 
         records.forEach((row, i) => {
-            const judge = new Judge(row.Judge, 1001 + i)
+            const judge = new Judge(row.judgeFirstName, row.judgeLastName, 1001 + i)
             judges.push(judge)
         })
 
@@ -159,23 +160,41 @@ class JudgingSystem {
     }
 
     _createRooms() {
-        const projectsPerRoom = Math.ceil(this.totalProjects / this.numRooms)
         const rooms = []
 
-        for (let i = 0; i < this.numRooms; i++) {
-            const startIdx = i * projectsPerRoom + 1
-            const endIdx = Math.min((i + 1) * projectsPerRoom + 1, this.totalProjects + 1)
-            const projectRange = []
+        // If roomCapacities is provided, use it directly
+        if (this.roomCapacities && this.roomCapacities.length === this.numRooms) {
+            let currentTableNumber = 1
 
-            for (let j = startIdx; j < endIdx; j++) {
-                projectRange.push(j)
+            for (let i = 0; i < this.numRooms; i++) {
+                const capacity = this.roomCapacities[i]
+                const projectRange = []
+
+                // Create project range based on room capacity
+                for (let j = 0; j < capacity; j++) {
+                    projectRange.push(currentTableNumber++)
+                }
+
+                const room = new Room(i + 1, projectRange, capacity)
+                rooms.push(room)
             }
+        } else {
+            // Fallback: divide projects evenly if roomCapacities not provided
+            const projectsPerRoom = Math.ceil(this.totalProjects / this.numRooms)
 
-            // If roomCapacities is provided, use it; otherwise default to project range length
-            const capacity = this.roomCapacities && this.roomCapacities[i] ? this.roomCapacities[i] : projectRange.length
+            for (let i = 0; i < this.numRooms; i++) {
+                const startIdx = i * projectsPerRoom + 1
+                const endIdx = Math.min((i + 1) * projectsPerRoom + 1, this.totalProjects + 1)
+                const projectRange = []
 
-            const room = new Room(i + 1, projectRange, capacity)
-            rooms.push(room)
+                for (let j = startIdx; j < endIdx; j++) {
+                    projectRange.push(j)
+                }
+
+                const capacity = projectRange.length
+                const room = new Room(i + 1, projectRange, capacity)
+                rooms.push(room)
+            }
         }
 
         return rooms
@@ -242,44 +261,57 @@ class AssignmentGenerator {
 
     /**
      * Distributes judges across rooms proportionally to each room's capacity.
-     * Rooms with higher capacity can accommodate more judges simultaneously.
+     * Rooms with more projects (higher capacity) can accommodate more judges simultaneously
+     * since there are more tables available for judges to visit at once.
      *
      * Algorithm:
-     * 1. Calculate total capacity across all rooms
-     * 2. Allocate judges proportionally: (roomCapacity / totalCapacity) × totalJudges
+     * 1. Calculate total capacity (total projects) across all rooms
+     * 2. Allocate judges proportionally: (roomProjectCount / totalProjects) × totalJudges
      * 3. Handle remainders by assigning extra judges to rooms with largest fractional parts
-     * 4. Ensure no room exceeds its capacity
+     * 4. Ensure no room gets more judges than it has projects (can't have 10 judges in room with 5 projects)
+     *
+     * Example:
+     * - Room A: 15 projects, Room B: 10 projects, Room C: 5 projects (30 total)
+     * - 20 judges total
+     * - Room A gets: (15/30) × 20 = 10 judges
+     * - Room B gets: (10/30) × 20 = 6.67 → 7 judges (after rounding)
+     * - Room C gets: (5/30) × 20 = 3.33 → 3 judges
      */
     _calculateJudgesPerRoom() {
+        // Total number of projects across all rooms
         const totalCapacity = this.system.rooms.reduce((sum, room) => sum + room.capacity, 0)
         const judgesPerRoom = []
         let assignedJudges = 0
         const fractionalParts = []
 
-        // First pass: Calculate base allocation and track fractional parts
+        // First pass: Calculate base allocation proportional to room size and track fractional parts
         for (let i = 0; i < this.system.numRooms; i++) {
             const room = this.system.rooms[i]
-            // Calculate proportional allocation
+            // Calculate how many judges this room should get based on its proportion of total projects
+            // Example: Room has 15 of 30 total projects → 15/30 = 50% → gets 50% of judges
             const idealAllocation = (room.capacity / totalCapacity) * this.system.numJudges
-            // Take the floor for base allocation
+            // Take the floor for base allocation to avoid over-assigning initially
             const baseAllocation = Math.floor(idealAllocation)
-            // Cap at room capacity
+            // Cap at room capacity - can't have more judges than projects in the room
+            // Example: Room with 5 projects can't have 10 judges at once
             const allocation = Math.min(baseAllocation, room.capacity)
 
             judgesPerRoom.push(allocation)
             assignedJudges += allocation
-            // Store fractional part for tie-breaking
+            // Store fractional part for determining who gets the remaining judges
+            // Example: idealAllocation = 6.7 → fractional part = 0.7
             fractionalParts.push({ roomIdx: i, fraction: idealAllocation - baseAllocation })
         }
 
         // Second pass: Distribute remaining judges to rooms with largest fractional parts
-        // Sort rooms by their fractional parts (descending)
+        // This ensures we use all judges without bias
+        // Sort rooms by their fractional parts (descending - highest fractions get priority)
         fractionalParts.sort((a, b) => b.fraction - a.fraction)
 
         let remainingJudges = this.system.numJudges - assignedJudges
         for (const { roomIdx } of fractionalParts) {
             if (remainingJudges === 0) break
-            // Only add if room hasn't reached capacity
+            // Only add if room hasn't reached its capacity (number of projects)
             if (judgesPerRoom[roomIdx] < this.system.rooms[roomIdx].capacity) {
                 judgesPerRoom[roomIdx]++
                 remainingJudges--
@@ -483,7 +515,7 @@ class AssignmentGenerator {
         for (let i = 0; i < this.assignments.length; i++) {
             const judge = this.system.judges[i]
             const row = {
-                Judge: `${judge.Name}`,
+                Judge: `${judge.firstName} ${judge.lastName}`,
                 "Judge ID": judge.judgeId,
             }
 
@@ -685,7 +717,7 @@ function main({
     console.log(`\n[v0] Initialized system with ${system.numJudges} judges and ${system.totalProjects} projects`)
     console.log("[v0] Room configuration:")
     for (const room of system.rooms) {
-        console.log(`  Room ${room.roomId}: ${room.projects.length} projects, capacity: ${room.capacity} judges`)
+        console.log(`  Room ${room.roomId}: ${room.projects.length} projects, capacity: ${room.capacity} projects`)
     }
 
     // Generate and verify assignments with retries
@@ -750,7 +782,8 @@ main({
     numRooms: 4, // Number of judging rooms
     numJudges: 20, // Number of judges (used in demo mode)
     totalProjects: 50, // Total number of projects (used in demo mode)
-    roomCapacities: [8, 12, 6, 10], // Optional: Specify capacity for each room (max judges at once)
+    // Rooms with more projects can accommodate more judges at once
+    roomCapacities: [15, 12, 13, 10], // Optional: Projects per room (if omitted, divided evenly)
     maxAttempts: 10, // Maximum retry attempts
     saveToFile: true, // Save results to CSV file
     outputFile: "assignments.csv", // Output file name
