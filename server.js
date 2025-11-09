@@ -15,7 +15,11 @@ const fs = require('fs');
 const { Parser } = require('json2csv');
 const nodemailer = require("nodemailer")
 const QRCode = require("qrcode")
-
+const sgMail = require("@sendgrid/mail")
+const client = require("@sendgrid/client")
+client.setApiKey(process.env.SENDGRID_API_KEY)
+sgMail.setApiKey(process.env.SENDGRID_API_KEY)
+const PORT = process.env.PORT || 3000
 
 //file imports
 const authRouter = require('./routes/authRouter');
@@ -24,6 +28,7 @@ const userSchema = require("./schemas/userSchema.js");
 const projectSchema = require("./schemas/projectSchema.js");
 const teamSchema = require("./schemas/teamSchema.js");
 const { table } = require("node:console");
+const crypto = require("crypto");
 
 //prod stuff (DO NOT TOUCH)
 if (process.env.NODE_ENV === 'production') {
@@ -88,7 +93,7 @@ mongoose.connect(dbUri, { useNewUrlParser: true, useUnifiedTopology: true }).the
 //parse csv files
 var CsvfileJudges = ("./datafiles/judges_auth.csv");
 var CsvfileAssignments = ("./datafiles/assignments.csv");
-var CsvfileTeams = ("./datafiles/teamsFinal.csv");
+var CsvfileTeams = ("./datafiles/team.csv");
 CsvfileJudges = path.resolve(CsvfileJudges)
 CsvfileAssignments = path.resolve(CsvfileAssignments)
 CsvfileTeams = path.resolve(CsvfileTeams)
@@ -404,14 +409,6 @@ app.get("/thankyou", (req, res) => {
     res.render("thankyou.ejs", { currentPage: "thankyou" })
 })
 
-const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-    },
-})
-
 app.get("/checkin1", ensureAuthenticated, (req, res) => {
     res.render("checkin1-admin.ejs", { currentPage: "checkin1" })
 })
@@ -547,19 +544,19 @@ app.post("/api/checkin1", ensureAuthenticated, async (req, res) => {
                 checkin2Link: checkin2Link,
             })
 
-            await transporter.sendMail({
-                from: `"HackUMass XIII Team" <${process.env.EMAIL_USER}>`,
+            await sgMail.send({
+                from: process.env.EMAIL_USER,
                 to: team.ProjectEmail,
                 subject: "✅ Check-In Complete - Your Table Assignment",
                 html: emailHtml,
             })
 
-            console.log(`[v0] Team ${team.ProjectName} checked in - Table ${nextTableNumber}, Room ${nextRoomNumber}`)
+            console.log(`[v0] Team ${team.ProjectName} checked in - Table ${assignment.tableNumber}, Room ${assignment.roomNumber}`)
 
             res.json({
                 success: true,
-                tableNumber: nextTableNumber,
-                roomNumber: nextRoomNumber,
+                tableNumber: assignment.tableNumber,
+                roomNumber: assignment.roomNumber,
                 teamName: team.ProjectName,
             })
         } catch (error) {
@@ -575,9 +572,10 @@ app.get("/checkin2/:base64email", async (req, res) => {
         const { base64email } = req.params
         const projectEmail = Buffer.from(base64email, "base64").toString("utf-8")
 
-        const team = await teamSchema.findOne({ ProjectName: projectEmail })
+        const team = await teamSchema.findOne({ ProjectEmail: projectEmail })
 
         if (!team) {
+            console.error(`[v0] Team with email ${projectEmail} not found for checkin2`)
             return res.redirect("/404")
         }
 
@@ -604,7 +602,7 @@ app.get("/checkin2/:base64email", async (req, res) => {
         })
     } catch (error) {
         console.error("[v0] Error in checkin2 page:", error)
-        res.redirect("/404")
+        //res.redirect("/404")
     }
 })
 
@@ -697,7 +695,7 @@ app.get("/uploadTeams", ensureAuthenticated, async (req, res) => {
                     Mem4Email: team.TeamMem4Email || "",
                     ProjectLink: team.SubUrl,
                     checkin1: false,
-                    checkin2: true,
+                    checkin2: false,
                 })
 
                 const base64Email = Buffer.from(team.projectEmail).toString("base64")
@@ -717,27 +715,24 @@ app.get("/uploadTeams", ensureAuthenticated, async (req, res) => {
                     checkin2Link: checkin2Link,
                 })
 
-                if (!transporter) {
-                    console.error("[v0] Email transporter not configured")
-                    errorCount++
-                    continue
-                }
-
                 if (process.env.SEND_EMAILS == "FALSE") {
                     console.log(`[v0] Email sending disabled. Skipping email for ${team.teamName}`)
                     errorCount++
                     continue
                 } else {
-                    await transporter.sendMail({
-                        from: `"HackUMass XII Team" <${process.env.EMAIL_USER}>`,
+                    await sgMail.send({
+                        from: process.env.EMAIL_USER,
                         to: team.projectEmail,
-                        subject: "🎯 HackUMass XIII Check-In Instructions - Action Required",
+                        subject: "🎯 HackUMass XIII Judging Check-In Instructions - Action Required",
                         html: emailHtml,
                         attachments: [
                             {
+                                content: qrCodeBuffer.toString("base64"),
                                 filename: "checkin-qrcode.png",
-                                content: qrCodeBuffer,
                                 cid: "checkinQR", // Content ID for referencing in HTML
+                                type: "image/png",
+                                disposition: "inline",
+                                content_id: "checkinQR"
                             },
                         ],
                     })
@@ -795,10 +790,76 @@ app.get("/download-teams-checkin2", ensureAuthenticated, async (req, res) => {
     }
 })
 
+app.get("/check-failed-emails", ensureAuthenticated, async (req, res) => {
+    try {
+        // Fetch bounced emails from SendGrid
+        const [bouncesResponse] = await client.request({
+            url: "/v3/suppression/bounces",
+            method: "GET",
+        })
+
+        const bouncedEmails = bouncesResponse.body.map((bounce) => bounce.email)
+
+        if (bouncedEmails.length === 0) {
+            console.log("[v0] No bounced emails found")
+            return res.json({
+                success: true,
+                message: "No bounced emails found",
+                bouncedTeams: [],
+            })
+        }
+
+        // Find teams with bounced emails
+        const affectedTeams = await teamSchema.find({
+            ProjectEmail: { $in: bouncedEmails },
+        })
+
+        console.log("\n========== BOUNCED EMAIL REPORT ==========")
+        console.log(`Total bounced emails: ${bouncedEmails.length}`)
+        console.log(`Affected teams: ${affectedTeams.length}\n`)
+
+        affectedTeams.forEach((team, index) => {
+            console.log(`${index + 1}. Team: ${team.ProjectName}`)
+            console.log(`   Email: ${team.ProjectEmail}`)
+            console.log(`   Category: ${team.Category || "N/A"}`)
+            console.log(`   Check-in 1: ${team.checkin1 ? "✓" : "✗"}`)
+            console.log(`   Check-in 2: ${team.checkin2 ? "✓" : "✗"}`)
+            if (team.TableNumber && team.RoomNumber) {
+                console.log(`   Assigned: Table ${team.TableNumber}, Room ${team.RoomNumber}`)
+            }
+            console.log("---")
+        })
+
+        console.log("==========================================\n")
+
+        res.json({
+            success: true,
+            bouncedCount: bouncedEmails.length,
+            affectedTeamsCount: affectedTeams.length,
+            bouncedTeams: affectedTeams.map((team) => ({
+                teamName: team.ProjectName,
+                email: team.ProjectEmail,
+                category: team.Category,
+                checkin1: team.checkin1,
+                checkin2: team.checkin2,
+                tableNumber: team.TableNumber,
+                roomNumber: team.RoomNumber,
+            })),
+        })
+    } catch (error) {
+        console.error("[v0] Error checking bounced emails:", error)
+        res.status(500).json({
+            success: false,
+            message: "Error checking bounced emails",
+            error: error.message,
+        })
+    }
+})
+
+
 // // catch-all route: use '/*' so path-to-regexp treats it as a valid wildcard
 // app.use((req, res) => {
 //     res.redirect("/404")
 // })
 //listen
-const PORT = process.env.PORT || 3000
 app.listen(PORT, () => console.log(`Connected on port ${PORT}`))

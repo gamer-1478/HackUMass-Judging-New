@@ -19,6 +19,8 @@
     "homepage": "https://github.com/gamer-1478/HackUMass-Judging-New#readme",
     "description": "",
     "dependencies": {
+        "@sendgrid/client": "^8.1.6",
+        "@sendgrid/mail": "^8.1.6",
         "bcrypt": "^6.0.0",
         "cookie-parser": "^1.4.7",
         "cookie-session": "^2.1.1",
