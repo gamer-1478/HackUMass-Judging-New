@@ -1,11 +1,11 @@
-Judge,Judge_Email,Judge_Password
-Anay Liu,angieliu@umass.edu,d1OXGVRM4Q
-Vianca Varma,vvarma@umass.edu,J$ok9K8qpZ
-Paulan Huang,pjhuang@umass.edu,sEv3VRaU84
-Akhnol Kar,akhanolkar@umass.edu,WxlsW@^ZI@
-Dhriti Reddy,dmadireddy@umass.edu,Sw0G4OWJ%A
-Shriya Gautam,sgautam@umass.edu,xS@&E0pC^C
-Raj Das,rajdas@umass.edu,q7nxJL3MTh
-Aanya Mehta,aanyamehta@umass.edu,xS@&E0pC^D
-Dev Mehta,Dvmehta@umass.edu,xS@&E0pC^E
-Ami Mehta,Ami.mehta@tufts.edu,30303
+Judge,Judge_Email,Judge_Password,Hardware
+Anay Liu,angieliu@umass.edu,d1OXGVRM4Q,False
+Vianca Varma,vvarma@umass.edu,J$ok9K8qpZ,False
+Paulan Huang,pjhuang@umass.edu,sEv3VRaU84,False
+Akhnol Kar,akhanolkar@umass.edu,WxlsW@^ZI@,False
+Dhriti Reddy,dmadireddy@umass.edu,Sw0G4OWJ%A,False
+Shriya Gautam,sgautam@umass.edu,xS@&E0pC^C,False
+Raj Das,rajdas@umass.edu,q7nxJL3MTh,False
+Aanya Mehta,aanyamehta@umass.edu,xS@&E0pC^D,True
+Dev Mehta,Dvmehta@umass.edu,xS@&E0pC^E,True
+Ami Mehta,Ami.mehta@tufts.edu,30303,True

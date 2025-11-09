@@ -1,18 +1,16 @@
 <div class="reg-container">
 
     <div class="reg-form-container">
-        <% if (!(typeof rejudge !== 'undefined' && rejudge)) { %>
-        <form id="skip-form" method="post" action="/skip" style="">
+        <div id="skip-form" style="">
             <div style="display: flex; flex-direction: row; justify-content: center; width: 100%;">
                 <button type="submit" class="reg-submit">Skip
                     Project</button>
             </div>
-        </form>
-        <% } %>
+        </div>
         <form id="main-form" method="post">
             <div style="display: flex; flex-direction: row; justify-content: center; width: 100%;">
                 <h1 id="form-title">Table Number: <span id="info" style="width: min-content; padding-right: 40px;">
-                        <%=currentTable%>
+                        <%=tutorialCurrentProject%>
                     </span>
                 </h1>
                 <h1 id="form-title">Room: <span id="info" style="width: min-content;">
@@ -20,12 +18,10 @@
                     </span>
                 </h1>
             </div>
-        <% if (!(typeof rejudge !=='undefined' && rejudge)) { %>
             <h1 id="form-title">Projects Judged: <span id="info" style="width: min-content;">
-                    <%=currentSlot%> / <%=totalProjects%>
+                    <%=tutorialCurrentProject%> / <%=totalProjects%>
                 </span>
             </h1>
-        <% } %>
             <h1 id="form-title">Project Name: <span id="info" style="width: min-content;">
                     <%=currentProject%>
                 </span>
@@ -134,7 +130,7 @@
         const score5 = document.getElementById('score5').value;
         const score6 = document.getElementById('score6').value;
         const comments = document.getElementById('comments').value;
-        const tableNumber = "<%=currentTable%>";
+        const tableNumber = "<%=tutorialCurrentProject%>";
 
         // Check if all required fields are filled
         if ([score1, score2, score3, score4, score5, score6].some(score => score === '') || comments === '') {
@@ -155,7 +151,7 @@
 
             try {
                 // Send data using fetch with the form's action URL and method
-                const response = await fetch('/dashboard', {
+                const response = await fetch('/tutorial', {
                     method: 'POST',
                     credentials: 'include',
                     headers: {

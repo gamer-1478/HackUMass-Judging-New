@@ -8,8 +8,8 @@ const mongoose = require('mongoose'),
     dateStringWithTime = moment(now).format('YYYY-MM-DD HH:MM:SS');
 
 const projectSchema = new mongoose.Schema({
-    teamName: reqString,
-    teamCategory: reqString,
+    ProjectName: reqString,
+    Category: reqString,
     teamJudge: reqString,
     teamJudgeEmail: reqString,
     teamTable: reqString,

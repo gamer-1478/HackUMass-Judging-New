@@ -13,22 +13,17 @@ const path = require('node:path');
 const csv = require("csvtojson");
 const fs = require('fs');
 const { Parser } = require('json2csv');
-const nodemailer = require("nodemailer")
-const QRCode = require("qrcode")
-const sgMail = require("@sendgrid/mail")
-const client = require("@sendgrid/client")
-client.setApiKey(process.env.SENDGRID_API_KEY)
-sgMail.setApiKey(process.env.SENDGRID_API_KEY)
 const PORT = process.env.PORT || 3000
 
 //file imports
 const authRouter = require('./routes/authRouter');
+const dashboardRouter = require('./routes/dashboardRouter.js');
+const checkinRouter = require('./routes/checkinRouter.js');
+
 const { ensureAuthenticated } = require("./middleware/auth.js");
 const userSchema = require("./schemas/userSchema.js");
-const projectSchema = require("./schemas/projectSchema.js");
 const teamSchema = require("./schemas/teamSchema.js");
-const { table } = require("node:console");
-const crypto = require("crypto");
+const { generateJudgingAssignments } = require("./utils/judging-api.js");
 
 //prod stuff (DO NOT TOUCH)
 if (process.env.NODE_ENV === 'production') {
@@ -86,20 +81,22 @@ passportInit(passport)
 app.use(passport.initialize());
 app.use(passport.session());
 
+const ROOM_CONFIG = [
+    { roomNumber: 1, capacity: 33 }, // S110
+    { roomNumber: 2, capacity: 49 }, // S131
+    { roomNumber: 3, capacity: 33 }, // S120
+    { roomNumber: 4, capacity: 40 }, // S140
+    { roomNumber: 5, capacity: 22 }, // N101
+    { roomNumber: 6, capacity: 31 }, // Hardware room - last room N155
+]
+
 //connect to mongodb
 const dbUri = process.env.MONGO_URI
 mongoose.connect(dbUri, { useNewUrlParser: true, useUnifiedTopology: true }).then(console.log("Connected to mongodb"))
 
 //parse csv files
 var CsvfileJudges = ("./datafiles/judges_auth.csv");
-var CsvfileAssignments = ("./datafiles/assignments.csv");
-var CsvfileTeams = ("./datafiles/team.csv");
 CsvfileJudges = path.resolve(CsvfileJudges)
-CsvfileAssignments = path.resolve(CsvfileAssignments)
-CsvfileTeams = path.resolve(CsvfileTeams)
-
-csv().fromFile(CsvfileAssignments).then((jsonObj) => { CsvfileAssignments = jsonObj })
-csv().fromFile(CsvfileTeams).then((jsonObj) => { CsvfileTeams = jsonObj })
 csv().fromFile(CsvfileJudges).then((jsonObj) => { CsvfileJudges = jsonObj })
 
 //routing
@@ -108,262 +105,98 @@ app.get("/", (req, res) => {
     res.render("landing.ejs", { currentPage: "home" })
 })
 
-app.get("/leaderboard", async (req, res) => {
-    try {
-        // Get all completed judgements from database
-        const completedJudgements = await projectSchema.find()
+// app.get("/leaderboard", async (req, res) => {
+//     try {
+//         // Get all completed judgements from database
+//         const completedJudgements = await projectSchema.find()
 
-        // Create a map to count judgements per table
-        const judgementsPerTable = {}
-        completedJudgements.forEach((judgement) => {
-            const tableNum = judgement.teamTable
-            if (!judgementsPerTable[tableNum]) {
-                judgementsPerTable[tableNum] = 0
-            }
-            judgementsPerTable[tableNum]++
-        })
+//         // Create a map to count judgements per table
+//         const judgementsPerTable = {}
+//         completedJudgements.forEach((judgement) => {
+//             const tableNum = judgement.teamTable
+//             if (!judgementsPerTable[tableNum]) {
+//                 judgementsPerTable[tableNum] = 0
+//             }
+//             judgementsPerTable[tableNum]++
+//         })
 
-        // Count total assignments per table
-        const assignmentsPerTable = {}
-        CsvfileAssignments.forEach((assignment) => {
-            // Skip header properties
-            if (assignment.Judge) {
-                // Loop through all slots for this judge
-                Object.keys(assignment).forEach((key) => {
-                    if (key.startsWith("Slot ")) {
-                        const slot = assignment[key]
-                        if (slot) {
-                            // Extract table number from slot (e.g., "mqv (Table 1)" -> "1")
-                            let tableNum = slot.substring(slot.indexOf(" ") + 1) // "(Table 1)"
-                            tableNum = tableNum.substring(tableNum.indexOf(" ") + 1) // "1)"
-                            tableNum = tableNum.replace(")", "") // "1"
+//         // Count total assignments per table
+//         const assignmentsPerTable = {}
+//         CsvfileAssignments.forEach((assignment) => {
+//             // Skip header properties
+//             if (assignment.Judge) {
+//                 // Loop through all slots for this judge
+//                 Object.keys(assignment).forEach((key) => {
+//                     if (key.startsWith("Slot ")) {
+//                         const slot = assignment[key]
+//                         if (slot) {
+//                             // Extract table number from slot (e.g., "mqv (Table 1)" -> "1")
+//                             let tableNum = slot.substring(slot.indexOf(" ") + 1) // "(Table 1)"
+//                             tableNum = tableNum.substring(tableNum.indexOf(" ") + 1) // "1)"
+//                             tableNum = tableNum.replace(")", "") // "1"
 
-                            if (!assignmentsPerTable[tableNum]) {
-                                assignmentsPerTable[tableNum] = 0
-                            }
-                            assignmentsPerTable[tableNum]++
-                        }
-                    }
-                })
-            }
-        })
+//                             if (!assignmentsPerTable[tableNum]) {
+//                                 assignmentsPerTable[tableNum] = 0
+//                             }
+//                             assignmentsPerTable[tableNum]++
+//                         }
+//                     }
+//                 })
+//             }
+//         })
 
-        // Build leaderboard data
-        const leaderboardData = CsvfileTeams.map((team) => {
-            const tableNum = team.tableNumber
-            const completed = judgementsPerTable[tableNum] || 0
-            const total = assignmentsPerTable[tableNum] || 0
+//         // Build leaderboard data
+//         const leaderboardData = CsvfileTeams.map((team) => {
+//             const tableNum = team.tableNumber
+//             const completed = judgementsPerTable[tableNum] || 0
+//             const total = assignmentsPerTable[tableNum] || 0
 
-            return {
-                teamName: team.teamName,
-                tableNumber: team.tableNumber,
-                roomNumber: team.roomNumber,
-                category: team.categoryApplied,
-                completed: completed,
-                total: total,
-                percentage: total > 0 ? Math.round((completed / total) * 100) : 0,
-            }
-        })
+//             return {
+//                 teamName: team.teamName,
+//                 tableNumber: team.tableNumber,
+//                 roomNumber: team.roomNumber,
+//                 category: team.categoryApplied,
+//                 completed: completed,
+//                 total: total,
+//                 percentage: total > 0 ? Math.round((completed / total) * 100) : 0,
+//             }
+//         })
 
-        // Sort by completion percentage (highest first), then by completed count
-        leaderboardData.sort((a, b) => {
-            if (b.percentage !== a.percentage) {
-                return b.percentage - a.percentage
-            }
-            return b.completed - a.completed
-        })
+//         // Sort by completion percentage (highest first), then by completed count
+//         leaderboardData.sort((a, b) => {
+//             if (b.percentage !== a.percentage) {
+//                 return b.percentage - a.percentage
+//             }
+//             return b.completed - a.completed
+//         })
 
-        // Calculate overall stats
-        const totalTeams = leaderboardData.length
-        const totalCompleted = leaderboardData.reduce((sum, team) => sum + team.completed, 0)
-        const totalAssignments = leaderboardData.reduce((sum, team) => sum + team.total, 0)
-        const fullyEvaluated = leaderboardData.filter((team) => team.completed === team.total && team.total > 0).length
+//         // Calculate overall stats
+//         const totalTeams = leaderboardData.length
+//         const totalCompleted = leaderboardData.reduce((sum, team) => sum + team.completed, 0)
+//         const totalAssignments = leaderboardData.reduce((sum, team) => sum + team.total, 0)
+//         const fullyEvaluated = leaderboardData.filter((team) => team.completed === team.total && team.total > 0).length
 
-        res.render("leaderboard.ejs", {
-            teams: leaderboardData,
-            stats: {
-                totalTeams,
-                totalCompleted,
-                totalAssignments,
-                fullyEvaluated,
-            },
-            currentPage: "leaderboard",
-        })
-    } catch (error) {
-        console.error("Error generating leaderboard:", error)
-        res.redirect("/404")
-    }
-})
+//         res.render("leaderboard.ejs", {
+//             teams: leaderboardData,
+//             stats: {
+//                 totalTeams,
+//                 totalCompleted,
+//                 totalAssignments,
+//                 fullyEvaluated,
+//             },
+//             currentPage: "leaderboard",
+//         })
+//     } catch (error) {
+//         console.error("Error generating leaderboard:", error)
+//         res.redirect("/404")
+//     }
+// })
 
 app.use("/auth", authRouter);
+app.use("/", dashboardRouter);
+app.use("/", checkinRouter);
 
-app.get("/dashboard", ensureAuthenticated, async (req, res) => {
-    userSchema.findOne({ email: req.user.Judge_Email }).then(async (user) => {
-        if (!user) {
-            userSchema.create({
-                email: req.user.Judge_Email,
-                name: req.user.Judge,
-                currentProject: 1
-            }).then(() => {
-                res.redirect("/dashboard")
-            })
-        }
-        else {
-            var ListOfAssignments = CsvfileAssignments.find(assignment => assignment.Judge === req.user.Judge);
-            var slot = "Slot " + user.currentProject;
-
-            var currentSlot = ListOfAssignments[slot];
-            if (!currentSlot) {
-                res.redirect("/thankyou")
-            } else {
-                //orignal = mqv (Table 1)
-                currentSlot = currentSlot.substring(currentSlot.indexOf(' ') + 1) //(Table 1)
-                currentSlot = currentSlot.substring(currentSlot.indexOf(' ') + 1); // 1)
-                currentSlot = currentSlot.replace(")", ""); //1
-
-                var currentTeam = CsvfileTeams.find(team => team.tableNumber == currentSlot);
-                const totalProjects = Object.keys(ListOfAssignments).length - 2;
-
-                res.render("judge.ejs", {
-                    "currentProject": currentTeam.teamName,
-                    "currentTable": currentTeam.tableNumber,
-                    "currentProjectCategory": currentTeam.categoryApplied,
-                    "currentSlot": currentSlot,
-                    "totalProjects": totalProjects,
-                    "roomNumber": currentTeam.roomNumber,
-                    "currentPage": "dashboard",
-                    "navbar": true
-                })
-            }
-        }
-    })
-})
-
-app.post("/dashboard", ensureAuthenticated, async (req, res) => {
-    var { score1, score2, score3, score4, score5, score6, comments, tableNumber } = req.body;
-
-    var CurrentJudge = await userSchema.findOne({ email: req.user.Judge_Email });
-
-    var CurrentTeam = await CsvfileTeams.find(team => team.tableNumber == tableNumber);
-
-    projectSchema.create({
-        teamName: CurrentTeam.teamName,
-        teamCategory: CurrentTeam.categoryApplied,
-        teamJudge: req.user.Judge,
-        teamJudgeEmail: req.user.Judge_Email,
-        teamTable: tableNumber,
-        score1,
-        score2,
-        score3,
-        score4,
-        score5,
-        score6,
-        comments
-    }).then(() => {
-        CurrentJudge.currentProject = CurrentJudge.currentProject + 1;
-        CurrentJudge.judgedProjects = [...CurrentJudge.judgedProjects, tableNumber];
-        CurrentJudge.skippedProjects = CurrentJudge.skippedProjects.filter(slot => {
-            slotNumber = slot.substring(slot.indexOf(' ') + 1) //(Table 1)
-            slotNumber = slotNumber.substring(slotNumber.indexOf(' ') + 1); // 1)
-            slotNumber = slotNumber.replace(")", ""); //1
-            return slotNumber !== tableNumber;
-        });
-        CurrentJudge.save().then(() => {
-            res.redirect("/dashboard");
-        });
-    })
-})
-
-app.post("/skip", ensureAuthenticated, async (req, res) => {
-    var CurrentJudge = await userSchema.findOne({ email: req.user.Judge_Email });
-    var ListOfAssignments = CsvfileAssignments.find(assignment => assignment.Judge === req.user.Judge);
-    var slot = "Slot " + CurrentJudge.currentProject;
-    var currentSlot = ListOfAssignments[slot];
-    CurrentJudge.currentProject = CurrentJudge.currentProject + 1;
-    CurrentJudge.skippedProjects = [...CurrentJudge.skippedProjects, currentSlot];
-    CurrentJudge.save().then(() => {
-        res.redirect("/dashboard");
-    })
-})
-
-app.get("/skipped", ensureAuthenticated, async (req, res) => {
-    var CurrentJudge = await userSchema.findOne({ email: req.user.Judge_Email });
-    var ListOfAssignments = CsvfileAssignments.find(assignment => assignment.Judge === req.user.Judge);
-    console.log("Current Judge:", CurrentJudge);
-    var skippedProjectsDetails = CurrentJudge.skippedProjects.map(slot => {
-        let currentSlot = slot;
-        currentSlot = currentSlot.substring(currentSlot.indexOf(' ') + 1) //(Table 1)
-        currentSlot = currentSlot.substring(currentSlot.indexOf(' ') + 1); // 1)
-        currentSlot = currentSlot.replace(")", ""); //1
-
-        var CurrentTeam = CsvfileTeams.find(team => team.tableNumber == currentSlot);
-        console.log("Current Team for skipped project:", CurrentTeam);
-        return {
-            name: CurrentTeam.teamName,
-            tableNumber: CurrentTeam.tableNumber,
-            roomNumber: CurrentTeam.roomNumber,
-            category: CurrentTeam.categoryApplied
-        };
-    });
-
-    res.render("skip.ejs", {
-        skippedProjects: skippedProjectsDetails,
-        currentPage: "skipped",
-        navbar: true
-    });
-})
-
-app.get("/assignment-sheet", ensureAuthenticated, async (req, res) => {
-    var CurrentJudge = await userSchema.findOne({ email: req.user.Judge_Email });
-    var ListOfAssignments = CsvfileAssignments.find(assignment => assignment.Judge === req.user.Judge);
-    var assignmentsDetails = [];
-
-    //instead of looping to the current project, loop through all assignments
-    for (let i = 1; i <= Object.keys(ListOfAssignments).length - 2; i++) {
-        let slot = "Slot " + i;
-        let currentSlot = ListOfAssignments[slot];
-        if (currentSlot) {
-            currentSlot = currentSlot.substring(currentSlot.indexOf(' ') + 1) //(Table 1)
-            currentSlot = currentSlot.substring(currentSlot.indexOf(' ') + 1); // 1)
-            currentSlot = currentSlot.replace(")", ""); //1
-
-            var CurrentTeam = CsvfileTeams.find(team => team.tableNumber == currentSlot);
-
-            assignmentsDetails.push({
-                name: CurrentTeam.teamName,
-                tableNumber: CurrentTeam.tableNumber,
-                roomNumber: CurrentTeam.roomNumber,
-                category: CurrentTeam.categoryApplied,
-                judged: i <= CurrentJudge.judgedProjects.length
-            });
-        }
-    }
-
-    res.render("assignments.ejs", {
-        assignments: assignmentsDetails,
-        judgedCount: CurrentJudge.judgedProjects.length,
-        totalAssigned: assignmentsDetails.length,
-        currentPage: "assignment-sheet",
-        navbar: true
-    });
-})
-
-app.get("/rejudge/:tableNumber", ensureAuthenticated, async (req, res) => {
-    //render judge.ejs with the project matching the table number
-    var tableNumber = req.params.tableNumber;
-    var currentTeam = CsvfileTeams.find(team => team.tableNumber == tableNumber);
-    res.render("judge.ejs", {
-        "currentProject": currentTeam.teamName,
-        "currentTable": currentTeam.tableNumber,
-        "currentProjectCategory": currentTeam.categoryApplied,
-        "currentSlot": tableNumber,
-        "totalProjects": null,
-        "roomNumber": currentTeam.roomNumber,
-        "currentPage": "dashboard",
-        "navbar": true
-    })
-})
-
+//data management routes (DO NOT TOUCH)
 // app.get("/weneedthefuckingdata", async (req, res) => {
 //     projectSchema.find().then((projects) => {
 //         //convert this data to a csv
@@ -399,263 +232,6 @@ app.get("/rejudge/:tableNumber", ensureAuthenticated, async (req, res) => {
 //     });
 //     res.send("Hello")
 // })
-
-
-app.get("/404", (req, res) => {
-    res.render("404.ejs", { currentPage: "404" })
-})
-
-app.get("/thankyou", (req, res) => {
-    res.render("thankyou.ejs", { currentPage: "thankyou" })
-})
-
-app.get("/checkin1", ensureAuthenticated, (req, res) => {
-    res.render("checkin1-admin.ejs", { currentPage: "checkin1" })
-})
-
-const ROOM_CONFIG = [
-    { roomNumber: 1, capacity: 49 }, // S131
-    { roomNumber: 2, capacity: 33 }, // S110
-    { roomNumber: 3, capacity: 33 }, // S120
-    { roomNumber: 4, capacity: 22 }, // N101
-    { roomNumber: 5, capacity: 40 }, // S140
-    { roomNumber: 6, capacity: 31 }, // Hardware room - last room
-]
-
-// Helper function to check if project is hardware
-function isHardwareProject(category) {
-    if (!category) return false
-    const categoryLower = category.toLowerCase()
-    return categoryLower.includes("hardware") || categoryLower.includes("iot") || categoryLower.includes("robotics")
-}
-
-// Helper function to get next available table assignment
-async function getNextAvailableTable(isHardware, session) {
-    if (isHardware) {
-        const hardwareRoom = ROOM_CONFIG[ROOM_CONFIG.length - 1]
-        // Use session to ensure count is done within transaction
-        const teamsInHardwareRoom = await teamSchema
-            .countDocuments({
-                checkin1: true,
-                RoomNumber: hardwareRoom.roomNumber,
-            })
-            .session(session)
-
-        if (teamsInHardwareRoom >= hardwareRoom.capacity) {
-            throw new Error("Hardware room is full. Please contact organizers.")
-        }
-
-        return {
-            tableNumber: teamsInHardwareRoom + 1,
-            roomNumber: hardwareRoom.roomNumber,
-        }
-    }
-
-    const regularRooms = ROOM_CONFIG.slice(0, -1) // All rooms except last one
-
-    for (const room of regularRooms) {
-        // Use session to ensure count is done within transaction
-        const teamsInRoom = await teamSchema
-            .countDocuments({
-                checkin1: true,
-                RoomNumber: room.roomNumber,
-            })
-            .session(session)
-
-        if (teamsInRoom < room.capacity) {
-            return {
-                tableNumber: teamsInRoom + 1,
-                roomNumber: room.roomNumber,
-            }
-        }
-    }
-
-    throw new Error("All regular rooms are full. Please contact organizers.")
-}
-
-app.post("/api/checkin1", ensureAuthenticated, async (req, res) => {
-    const maxRetries = 3
-    let retryCount = 0
-
-    while (retryCount < maxRetries) {
-        const session = await mongoose.startSession()
-        session.startTransaction()
-
-        try {
-            const { qrData } = req.body
-
-            // Decode the base64 email from QR code
-            const projectEmail = Buffer.from(qrData, "base64").toString("utf-8")
-
-            const team = await teamSchema.findOne({ ProjectEmail: projectEmail }).session(session)
-
-            if (!team) {
-                await session.abortTransaction()
-                session.endSession()
-                return res.json({ success: false, message: "Team not found" })
-            }
-
-            if (team.checkin1) {
-                await session.abortTransaction()
-                session.endSession()
-                return res.json({
-                    success: false,
-                    message: "Team already checked in",
-                })
-            }
-
-            const isHardware = isHardwareProject(team.Category)
-            const assignment = await getNextAvailableTable(isHardware, session)
-
-            const duplicateCheck = await teamSchema
-                .findOne({
-                    RoomNumber: assignment.roomNumber,
-                    TableNumber: assignment.tableNumber,
-                    checkin1: true,
-                })
-                .session(session)
-
-            if (duplicateCheck) {
-                // Another team got this table, retry
-                await session.abortTransaction()
-                session.endSession()
-                retryCount++
-                console.log(`[v0] Duplicate table detected for ${team.ProjectName}, retrying... (${retryCount}/${maxRetries})`)
-                continue
-            }
-
-            team.TableNumber = assignment.tableNumber
-            team.RoomNumber = assignment.roomNumber
-            team.checkin1 = true
-            await team.save({ session })
-
-            // Commit the transaction
-            await session.commitTransaction()
-            session.endSession()
-
-
-            const base64Email = Buffer.from(team.ProjectEmail).toString("base64")
-            const checkin2Link = `${process.env.BASE_URL || "http://localhost:3000"}/checkin2/${base64Email}`
-
-            const emailHtml = await ejs.renderFile(path.join(__dirname, "views", "emails", "table-assignment.ejs"), {
-                teamName: team.ProjectName,
-                tableNumber: assignment.tableNumber,
-                roomNumber: assignment.roomNumber,
-                checkin2Link: checkin2Link,
-            })
-
-            await sgMail.send({
-                from: process.env.EMAIL_USER,
-                to: team.ProjectEmail,
-                subject: "✅ Check-In Complete - Your Table Assignment",
-                html: emailHtml,
-            })
-
-            console.log(`[v0] Team ${team.ProjectName} checked in - Table ${assignment.tableNumber}, Room ${assignment.roomNumber}`)
-
-            res.json({
-                success: true,
-                tableNumber: assignment.tableNumber,
-                roomNumber: assignment.roomNumber,
-                teamName: team.ProjectName,
-            })
-        } catch (error) {
-            console.error("[v0] Error in checkin1:", error)
-            res.json({ success: false, message: "Check-in failed. Please try again." })
-        }
-    }
-    return res.json({ success: false, message: "Check-in failed after multiple attempts. Please try again." })
-})
-
-app.get("/checkin2/:base64email", async (req, res) => {
-    try {
-        const { base64email } = req.params
-        const projectEmail = Buffer.from(base64email, "base64").toString("utf-8")
-
-        const team = await teamSchema.findOne({ ProjectEmail: projectEmail })
-
-        if (!team) {
-            console.error(`[v0] Team with email ${projectEmail} not found for checkin2`)
-            return res.redirect("/404")
-        }
-
-        if (!team.checkin1) {
-            return res.render("error.ejs", {
-                message: "Please complete Check-In Step 1 at the Organizer Desk first.",
-                currentPage: "error",
-            })
-        }
-
-        if (team.checkin2) {
-            return res.render("success.ejs", {
-                message: "You have already completed check-in. Good luck with your project!",
-                currentPage: "success",
-            })
-        }
-
-        res.render("checkin2-participant.ejs", {
-            teamEmail: projectEmail,
-            teamName: team.ProjectName,
-            tableNumber: team.TableNumber,
-            roomNumber: team.RoomNumber,
-            currentPage: "checkin2",
-        })
-    } catch (error) {
-        console.error("[v0] Error in checkin2 page:", error)
-        //res.redirect("/404")
-    }
-})
-
-app.post("/api/checkin2", async (req, res) => {
-    try {
-        const { teamEmail, tableQRData } = req.body
-
-        const team = await teamSchema.findOne({ ProjectEmail: teamEmail })
-
-        if (!team) {
-            return res.json({ success: false, message: "Team not found" })
-        }
-
-        if (!team.checkin1) {
-            return res.json({
-                success: false,
-                message: "Please complete Step 1 check-in first",
-            })
-        }
-
-        if (team.checkin2) {
-            return res.json({
-                success: false,
-                message: "You have already completed this check-in",
-            })
-        }
-
-        // Verify the QR code matches the assigned table
-        // The table QR should contain table number info
-        const expectedTableData = crypto.createHash('sha256').update(`Table ${team.TableNumber}`).digest('hex')
-
-        if (tableQRData !== expectedTableData) {
-            return res.json({
-                success: false,
-                message: `Wrong table! This is not Table ${team.TableNumber}`,
-            })
-        }
-
-        // Mark check-in 2 as complete
-        team.checkin2 = true
-        await team.save()
-
-        console.log(`[v0] Team ${team.ProjectName} completed check-in 2`)
-
-        res.json({
-            success: true,
-            message: "Check-in complete! You're all set. Good luck with your project!",
-        })
-    } catch (error) {
-        console.error("[v0] Error in checkin2 API:", error)
-        res.json({ success: false, message: "Check-in failed. Please try again." })
-    }
-})
 
 app.get("/uploadTeams", ensureAuthenticated, async (req, res) => {
     try {
@@ -693,8 +269,9 @@ app.get("/uploadTeams", ensureAuthenticated, async (req, res) => {
                     Mem2Email: team.TeamMem2Email || "",
                     Mem3Email: team.TeamMem3Email || "",
                     Mem4Email: team.TeamMem4Email || "",
+                    MLH: team.MLH || "",
                     ProjectLink: team.SubUrl,
-                    HardwareJudge: team.HardwareJudge == "true" ? true : false || false,
+                    HardwareJudge: team.HardwareJudge.toLowerCase() == "true" ? true : false || false,
                     checkin1: false,
                     checkin2: false,
                 })
@@ -791,6 +368,95 @@ app.get("/download-teams-checkin2", ensureAuthenticated, async (req, res) => {
     }
 })
 
+app.get("/generate_assignments", ensureAuthenticated, async (req, res) => {
+    // judges from judges_auth.csv as name and email and make sure hardware is false
+    let nonHardwareJudges = CsvfileJudges.filter(judge => judge.Hardware.toLowerCase() == "false")
+    nonHardwareJudges = nonHardwareJudges.map(judge => ({
+        name: judge.Judge,
+        email: judge.Judge_Email
+    }))
+    let hardwareJudges = CsvfileJudges.filter(judge => judge.Hardware.toLowerCase() == "true")
+    hardwareJudges = hardwareJudges.map(judge => ({
+        name: judge.Judge,
+        email: judge.Judge_Email
+    }))
+    // get teams from teams schema who have checkin1 and checkin2 as true
+    const nonHardwareteams = await teamSchema.find({ checkin1: true, checkin2: true, HardwareJudge: false })
+    const hardwareTeams = await teamSchema.find({ checkin1: true, checkin2: true, HardwareJudge: true })
+    // only give name and table number
+    const mappedNonHardwareTeams = nonHardwareteams.map(team => ({
+        name: team.ProjectName,
+        tableNumber: team.TableNumber
+    }))
+    const mappedHardwareTeams = hardwareTeams.map(team => ({
+        name: team.ProjectName,
+        tableNumber: team.TableNumber
+    }))
+
+    const NonHardwareAssignments = generateJudgingAssignments({
+        teams: mappedNonHardwareTeams,
+        judges: nonHardwareJudges,
+        judgingsPerProject: 3,
+        numRooms: ROOM_CONFIG.length - 1, // exclude hardware room
+        roomCapacities: ROOM_CONFIG.slice(0, -1).map(room => room.capacity),
+        maxAttempts: 10
+    })
+
+    const HardwareAssignments = generateJudgingAssignments({
+        teams: mappedHardwareTeams,
+        judges: hardwareJudges,
+        judgingsPerProject: 3,
+        numRooms: 1, // hardware room only
+        roomCapacities: [ROOM_CONFIG[ROOM_CONFIG.length - 1].capacity],
+        maxAttempts: 10
+    })
+
+    // find the judge as user in userSchema and update their current assignments to the generated ones, and if not found create a new user
+    for (const assignment of NonHardwareAssignments.assignments) {
+        let user = await userSchema.findOne({ name: assignment.name })
+        console.log("Processing assignment for judge:", assignment.name)
+        if (!user) {
+            const judge = CsvfileJudges.find(j => j.Judge === assignment.name)
+            user = new userSchema({
+                name: judge.Judge,
+                email: judge.Judge_Email,
+                assignedProjects: assignment.assignments,
+                currentProject: 1,
+                tutorialCompleted: false,
+                tutorialCurrentProject: 1
+            })
+        } else {
+            user.assignedProjects = assignment.assignments
+        }
+        await user.save()
+    }
+
+    for (const assignment of HardwareAssignments.assignments) {
+        let user = await userSchema.findOne({ name: assignment.name })
+        console.log("Processing assignment for judge:", assignment.name)
+        if (!user) {
+            const judge = CsvfileJudges.find(j => j.Judge === assignment.name)
+            user = new userSchema({
+                name: judge.Judge,
+                email: judge.Judge_Email,
+                assignedProjects: assignment.assignments,
+                currentProject: 1,
+                tutorialCompleted: false,
+                tutorialCurrentProject: 1
+            })
+        } else {
+            user.assignedProjects = assignment.assignments
+        }
+        await user.save()
+    }
+
+    res.json({
+        success: true,
+        nonHardwareAssignments: NonHardwareAssignments,
+        hardwareAssignments: HardwareAssignments
+    })
+})
+
 app.get("/check-failed-emails", ensureAuthenticated, async (req, res) => {
     try {
         // Fetch bounced emails from SendGrid
@@ -836,6 +502,7 @@ app.get("/check-failed-emails", ensureAuthenticated, async (req, res) => {
         res.json({
             success: true,
             bouncedCount: bouncedEmails.length,
+            bouncedEmails: bouncedEmails,
             affectedTeamsCount: affectedTeams.length,
             bouncedTeams: affectedTeams.map((team) => ({
                 teamName: team.ProjectName,
@@ -857,10 +524,43 @@ app.get("/check-failed-emails", ensureAuthenticated, async (req, res) => {
     }
 })
 
+app.get("/checkin-has-failed", ensureAuthenticated, async (req, res) => {
+    //assign each team a table number according to the room capacities defined in ROOM_CONFIG and mark them as checked in. Make sure hardware teams go to the hardware room
+    try {
+        const teams = await teamSchema.find({ })
+        let processedCount = 0
+        for (const team of teams) {
+            const isHardware = team.HardwareJudge
+            const assignment = await getNextAvailableTable(isHardware)
+            team.TableNumber = assignment.tableNumber
+            team.RoomNumber = assignment.roomNumber
+            team.checkin1 = true
+            team.checkin2 = true //also mark checkin2 as complete since they couldn't do it
+            await team.save()
+            processedCount++
+        }
+        res.json({
+            success: true,
+            message: `Processed ${processedCount} teams and assigned table numbers.`,
+        })
+    } catch (error) {
+        console.error("[v0] Error in checkin-has-failed route:", error)
+        res.status(500).json({
+            success: false,
+            message: "Error processing teams",
+            error: error.message,
+        })
+    }
+})
+
+app.get("/update-bias-scores", ensureAuthenticated, async (req, res) => {
+    res.send("Not implemented yet")
+})
 
 // // catch-all route: use '/*' so path-to-regexp treats it as a valid wildcard
-// app.use((req, res) => {
-//     res.redirect("/404")
-// })
+app.use((req, res) => {
+    res.redirect("/404")
+})
+
 //listen
 app.listen(PORT, () => console.log(`Connected on port ${PORT}`))

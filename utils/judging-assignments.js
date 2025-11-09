@@ -25,7 +25,6 @@ class Room {
     constructor(roomId, projects, capacity = null) {
         this.roomId = roomId
         this.projects = projects
-        // This determines how much space/how many tables are in the room
         this.capacity = capacity !== null ? capacity : projects.length
     }
 }
@@ -121,7 +120,6 @@ class JudgingSystem {
 
         for (let i = 0; i < this.totalProjects; i++) {
             const name = Array.from({ length: 3 }, () => String.fromCharCode(97 + Math.floor(Math.random() * 26))).join("")
-
             const project = new Project(name, i + 1)
             projects.push(project)
         }
@@ -137,7 +135,7 @@ class JudgingSystem {
         const judges = []
 
         records.forEach((row, i) => {
-            const judge = new Judge(row.Judge, 1001 + i)
+            const judge = new Judge(row.judgeFirstName, row.judgeLastName, 1001 + i)
             judges.push(judge)
         })
 
@@ -162,7 +160,6 @@ class JudgingSystem {
     _createRooms() {
         const rooms = []
 
-        // If roomCapacities is provided, use it directly
         if (this.roomCapacities && this.roomCapacities.length === this.numRooms) {
             let currentTableNumber = 1
 
@@ -170,7 +167,6 @@ class JudgingSystem {
                 const capacity = this.roomCapacities[i]
                 const projectRange = []
 
-                // Create project range based on room capacity
                 for (let j = 0; j < capacity; j++) {
                     projectRange.push(currentTableNumber++)
                 }
@@ -179,7 +175,6 @@ class JudgingSystem {
                 rooms.push(room)
             }
         } else {
-            // Fallback: divide projects evenly if roomCapacities not provided
             const projectsPerRoom = Math.ceil(this.totalProjects / this.numRooms)
 
             for (let i = 0; i < this.numRooms; i++) {
@@ -208,110 +203,62 @@ class JudgingSystem {
 class AssignmentGenerator {
     constructor(system) {
         this.system = system
-        // Store all judge assignments as they are being built
         this.assignments = []
-        // Track how many times each project has been assigned
         this.projectCounts = {}
-        // Track how many assignments each judge has received
         this.judgeCounts = {}
 
-        // Initialize project counts (all start at 0)
         for (let i = 1; i <= system.totalProjects; i++) {
             this.projectCounts[i] = 0
         }
-        // Initialize judge counts (all start at 0)
         for (let i = 0; i < system.numJudges; i++) {
             this.judgeCounts[i] = 0
         }
 
-        // Calculate total number of judgings needed across all projects
-        // Example: 50 projects × 3 judgings each = 150 total judgings
         this.totalJudgings = system.totalProjects * system.judgingsPerProject
-
-        // Calculate base assignments per judge (divide total work evenly)
-        // Example: 150 judgings ÷ 20 judges = 7.5 → base = 7
         this.basePerJudge = Math.floor(this.totalJudgings / system.numJudges)
-        // Calculate remaining assignments that need to be distributed
-        // Example: 150 % 20 = 10 extra assignments to distribute
         this.extraAssignments = this.totalJudgings % system.numJudges
 
-        // Distribute judges to rooms proportionally based on their capacity
         this.judgesPerRoom = this._calculateJudgesPerRoom()
 
-        // Assign each judge to a starting room
-        // This creates an array where each element is a room index
-        // Example: [0, 0, 1, 1, 2, 3, 3, ...] means first two judges start in room 0, etc.
         this.initialRoomAssignments = []
         for (let roomIdx = 0; roomIdx < system.numRooms; roomIdx++) {
             for (let j = 0; j < this.judgesPerRoom[roomIdx]; j++) {
                 this.initialRoomAssignments.push(roomIdx)
             }
         }
-        // Shuffle to randomize which specific judges go to which rooms
         this._shuffleArray(this.initialRoomAssignments)
 
-        // Calculate maximum assignments any single judge will receive
-        // Example: base 7 + 1 extra = 8 max per judge
         this.maxPerJudge = this.basePerJudge + (this.extraAssignments > 0 ? 1 : 0)
-        // Calculate how many projects to judge in each room phase
-        // Each judge rotates through all rooms, judging some projects in each
-        // Example: 8 total ÷ 4 rooms = 2 projects per room
         this.teamsPerPhase = Math.ceil(this.maxPerJudge / system.numRooms)
     }
 
-    /**
-     * Distributes judges across rooms proportionally to each room's capacity.
-     * Rooms with more projects (higher capacity) can accommodate more judges simultaneously
-     * since there are more tables available for judges to visit at once.
-     *
-     * Algorithm:
-     * 1. Calculate total capacity (total projects) across all rooms
-     * 2. Allocate judges proportionally: (roomProjectCount / totalProjects) × totalJudges
-     * 3. Handle remainders by assigning extra judges to rooms with largest fractional parts
-     * 4. Ensure no room gets more judges than it has projects (can't have 10 judges in room with 5 projects)
-     *
-     * Example:
-     * - Room A: 15 projects, Room B: 10 projects, Room C: 5 projects (30 total)
-     * - 20 judges total
-     * - Room A gets: (15/30) × 20 = 10 judges
-     * - Room B gets: (10/30) × 20 = 6.67 → 7 judges (after rounding)
-     * - Room C gets: (5/30) × 20 = 3.33 → 3 judges
-     */
+    generateAssignments() {
+        this._createBalancedAssignments()
+        return this._createAssignmentDataFrame()
+    }
+
     _calculateJudgesPerRoom() {
-        // Total number of projects across all rooms
         const totalCapacity = this.system.rooms.reduce((sum, room) => sum + room.capacity, 0)
         const judgesPerRoom = []
         let assignedJudges = 0
         const fractionalParts = []
 
-        // First pass: Calculate base allocation proportional to room size and track fractional parts
         for (let i = 0; i < this.system.numRooms; i++) {
             const room = this.system.rooms[i]
-            // Calculate how many judges this room should get based on its proportion of total projects
-            // Example: Room has 15 of 30 total projects → 15/30 = 50% → gets 50% of judges
             const idealAllocation = (room.capacity / totalCapacity) * this.system.numJudges
-            // Take the floor for base allocation to avoid over-assigning initially
             const baseAllocation = Math.floor(idealAllocation)
-            // Cap at room capacity - can't have more judges than projects in the room
-            // Example: Room with 5 projects can't have 10 judges at once
             const allocation = Math.min(baseAllocation, room.capacity)
 
             judgesPerRoom.push(allocation)
             assignedJudges += allocation
-            // Store fractional part for determining who gets the remaining judges
-            // Example: idealAllocation = 6.7 → fractional part = 0.7
             fractionalParts.push({ roomIdx: i, fraction: idealAllocation - baseAllocation })
         }
 
-        // Second pass: Distribute remaining judges to rooms with largest fractional parts
-        // This ensures we use all judges without bias
-        // Sort rooms by their fractional parts (descending - highest fractions get priority)
         fractionalParts.sort((a, b) => b.fraction - a.fraction)
 
         let remainingJudges = this.system.numJudges - assignedJudges
         for (const { roomIdx } of fractionalParts) {
             if (remainingJudges === 0) break
-            // Only add if room hasn't reached its capacity (number of projects)
             if (judgesPerRoom[roomIdx] < this.system.rooms[roomIdx].capacity) {
                 judgesPerRoom[roomIdx]++
                 remainingJudges--
@@ -321,7 +268,6 @@ class AssignmentGenerator {
         return judgesPerRoom
     }
 
-    // Fisher-Yates shuffle algorithm for randomizing arrays
     _shuffleArray(array) {
         for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1))
@@ -329,123 +275,40 @@ class AssignmentGenerator {
         }
     }
 
-    /**
-     * Calculates target number of assignments for a specific judge.
-     * Distributes extra assignments to the first N judges where N is the remainder.
-     *
-     * Example: 150 judgings ÷ 20 judges = 7 base + 10 extra
-     * - Judges 0-9 get: 7 + 1 = 8 assignments
-     * - Judges 10-19 get: 7 assignments
-     */
     _getTargetAssignments(judgeId) {
         return this.basePerJudge + (judgeId < this.extraAssignments ? 1 : 0)
     }
 
-    /**
-     * Core assignment algorithm - creates balanced project assignments for all judges.
-     *
-     * HIGH-LEVEL OVERVIEW:
-     * This function ensures every project is judged the correct number of times while:
-     * 1. Balancing workload evenly across judges
-     * 2. Preventing judges from being at the same table simultaneously
-     * 3. Having judges rotate through all rooms
-     * 4. Respecting room capacities
-     *
-     * ALGORITHM STEPS:
-     *
-     * FOR EACH JUDGE (judgeId):
-     *   1. Determine their starting room (from initial room assignments)
-     *   2. Calculate how many projects they need to judge (target assignments)
-     *
-     *   FOR EACH PHASE (judges rotate through all rooms):
-     *     3. Determine current room (rotating from their start room)
-     *     4. Get list of projects in this room
-     *     5. Calculate how many projects to assign in this phase
-     *
-     *     FOR EACH SLOT in this phase:
-     *       6. Determine the absolute time slot index across all phases
-     *
-     *       COLLISION AVOIDANCE:
-     *       7. Build set of projects already assigned at this time slot
-     *          (Check what all previous judges are doing at this same time)
-     *          This prevents multiple judges from being at same table simultaneously
-     *
-     *       TEAM SELECTION:
-     *       8. Find available teams in current room that:
-     *          - Haven't been assigned at this time slot (no collision)
-     *          - Haven't reached their required judging count
-     *
-     *       9. If no teams available in current room, search other rooms
-     *
-     *       10. Select team with lowest judging count (balance assignments)
-     *
-     *       11. Record assignment and update counts
-     *
-     * KEY DATA STRUCTURES:
-     * - this.assignments: 2D array [judgeId][slotIndex] = projectTableNumber
-     * - this.projectCounts: How many times each project has been assigned
-     * - currentSlotAssignments: Set of projects assigned at current time slot (prevents collisions)
-     * - roomTeams: Projects available in current room (gets filtered as teams are assigned)
-     *
-     * EXAMPLE EXECUTION (simplified):
-     * Judge 0 starts in Room 1:
-     *   Phase 0 (Room 1): Assigns projects 1, 2
-     *   Phase 1 (Room 2): Assigns projects 11, 12
-     *   Phase 2 (Room 3): Assigns projects 21, 22
-     *   Phase 3 (Room 4): Assigns projects 31, 32
-     *
-     * At each slot, checks: "Is any other judge already assigned to this project right now?"
-     */
     _createBalancedAssignments() {
-        // Iterate through each judge to build their complete schedule
-        for (let judgeId = 0; judgeId < this.system.numJudges; judgeId++) {
-            // Initialize empty assignment list for this judge
-            const judgeAssignments = []
-            // Get this judge's starting room (from initial random distribution)
-            const startRoom = this.initialRoomAssignments[judgeId]
-            // Calculate total assignments needed for this judge
-            const targetAssignments = this._getTargetAssignments(judgeId)
-            // Track how many more assignments this judge needs
-            let remainingAssignments = targetAssignments
+        const judgeOrder = Array.from({ length: this.system.numJudges }, (_, i) => i)
 
-            // PHASE LOOP: Judge rotates through all rooms
-            // Example: If starting in Room 2 with 4 total rooms
-            //   Phase 0: Room 2, Phase 1: Room 3, Phase 2: Room 0, Phase 3: Room 1
+        for (const judgeId of judgeOrder) {
+            const judgeAssignments = []
+            const startRoom = this.initialRoomAssignments[judgeId]
+            const targetAssignments = this._getTargetAssignments(judgeId)
+            let remainingAssignments = targetAssignments
+            const judgedTables = new Set()
+
             for (let phase = 0; phase < this.system.numRooms; phase++) {
-                // Calculate current room using circular rotation
                 const currentRoom = (startRoom + phase) % this.system.numRooms
-                // Get projects available in this room (copy array to avoid mutations)
                 const roomTeams = [...this.system.rooms[currentRoom].projects]
-                // Calculate how many projects to assign in this phase (may be less in final phase)
                 const slotsThisPhase = Math.min(this.teamsPerPhase, remainingAssignments)
 
-                // SLOT LOOP: Assign specific projects in this phase
                 for (let slot = 0; slot < slotsThisPhase; slot++) {
-                    // Calculate absolute time slot across all phases
-                    // This is crucial for detecting collisions across all judges
                     const currentSlot = judgeAssignments.length
-
-                    // COLLISION DETECTION: Build set of projects assigned at this exact time slot
-                    // Check all previously assigned judges to see what they're doing right now
                     const currentSlotAssignments = new Set()
                     for (const prevJudgeAssignments of this.assignments) {
-                        // Only check if previous judge has an assignment at this time
                         if (currentSlot < prevJudgeAssignments.length) {
                             currentSlotAssignments.add(prevJudgeAssignments[currentSlot])
                         }
                     }
 
-                    // TEAM SELECTION: Find available teams in current room
-                    // Teams must: (1) not be assigned at this time slot, (2) need more judgings
-                    let availableTeams = this._getAvailableTeams(roomTeams, currentSlotAssignments)
+                    let availableTeams = this._getAvailableTeams(roomTeams, currentSlotAssignments, judgedTables)
 
-                    // FALLBACK: If no teams available in current room, search other rooms
-                    // This can happen if current room is small or all projects fully judged
                     if (availableTeams.length === 0) {
                         for (const otherRoom of this.system.rooms) {
-                            // Skip the room we already checked
                             if (JSON.stringify(otherRoom.projects) !== JSON.stringify(roomTeams)) {
-                                availableTeams = this._getAvailableTeams(otherRoom.projects, currentSlotAssignments)
+                                availableTeams = this._getAvailableTeams(otherRoom.projects, currentSlotAssignments, judgedTables)
                                 if (availableTeams.length > 0) {
                                     break
                                 }
@@ -453,52 +316,37 @@ class AssignmentGenerator {
                         }
                     }
 
-                    // ASSIGNMENT: Select and record team assignment
                     if (availableTeams.length > 0) {
-                        // Choose team with lowest judging count to balance assignments
                         const team = availableTeams.reduce((min, t) => (this.projectCounts[t] < this.projectCounts[min] ? t : min))
 
-                        // Record assignment
                         judgeAssignments.push(team)
-                        // Update counters
+                        judgedTables.add(team)
                         this.projectCounts[team]++
                         this.judgeCounts[judgeId]++
                         remainingAssignments--
 
-                        // Remove assigned team from room pool (can't assign same team twice in this phase)
                         const teamIdx = roomTeams.indexOf(team)
                         if (teamIdx !== -1) {
                             roomTeams.splice(teamIdx, 1)
                         }
                     } else {
-                        // No available teams - mark as empty slot (-1)
                         judgeAssignments.push(-1)
                     }
                 }
             }
 
-            // Add this judge's complete assignment schedule to master list
             this.assignments.push(judgeAssignments)
         }
     }
 
-    /**
-     * Filters projects to find those available for assignment at current time slot.
-     *
-     * A project is available if:
-     * 1. It exists in the room we're considering
-     * 2. It's not already assigned to another judge at this exact time slot (no collision)
-     * 3. It hasn't reached its required number of judgings yet
-     *
-     * @param {Array} roomTeams - Project table numbers in the room being considered
-     * @param {Set} currentSlotAssignments - Projects already assigned at this time slot
-     * @returns {Array} - Filtered list of available project table numbers
-     */
-    _getAvailableTeams(roomTeams, currentSlotAssignments) {
+    _getAvailableTeams(roomTeams, currentSlotAssignments, judgedTables) {
         const available = []
         for (const team of roomTeams) {
-            // Check: Not assigned at this time AND needs more judgings
-            if (!currentSlotAssignments.has(team) && this.projectCounts[team] < this.system.judgingsPerProject) {
+            if (
+                !currentSlotAssignments.has(team) &&
+                !judgedTables.has(team) &&
+                this.projectCounts[team] < this.system.judgingsPerProject
+            ) {
                 available.push(team)
             }
         }
@@ -506,10 +354,147 @@ class AssignmentGenerator {
     }
 
     _createAssignmentDataFrame() {
-        // Find max number of teams assigned to any judge
         const maxTeams = Math.max(...this.assignments.map((arr) => arr.filter((x) => x !== -1).length))
 
-        // Create CSV data
+        const csvData = []
+
+        for (let i = 0; i < this.assignments.length; i++) {
+            const judge = this.system.judges[i]
+            const row = {
+                Judge: `${judge.firstName} ${judge.lastName}`,
+                "Judge ID": judge.judgeId,
+            }
+
+            for (let j = 0; j < maxTeams; j++) {
+                const teamNum = this.assignments[i][j]
+                if (teamNum && teamNum !== -1) {
+                    const project = this.system.projects[teamNum - 1]
+                    row[`Slot ${j + 1}`] = `${project.name} (Table ${project.tableNumber})`
+                } else {
+                    row[`Slot ${j + 1}`] = "No team for this time slot"
+                }
+            }
+
+            csvData.push(row)
+        }
+
+        return csvData
+    }
+}
+
+// ============================================================================
+// Assignment Verifier
+// ============================================================================
+
+class AssignmentVerifier {
+    constructor(data, system, assignments) {
+        this.data = data
+        this.system = system
+        this.assignments = assignments // Added assignments for fix-up phase
+    }
+
+    _verifyJudgingCount() {
+        const projectCounts = {}
+
+        for (const row of this.data) {
+            for (const [key, value] of Object.entries(row)) {
+                if (key.startsWith("Slot") && value !== "No team for this time slot") {
+                    const match = value.match(/Table (\d+)\)/)
+                    if (match) {
+                        const tableNum = Number.parseInt(match[1])
+                        projectCounts[tableNum] = (projectCounts[tableNum] || 0) + 1
+                    }
+                }
+            }
+        }
+
+        const issues = []
+        const underJudgedProjects = [] // Track projects that need more judgements
+        for (let i = 1; i <= this.system.totalProjects; i++) {
+            const count = projectCounts[i] || 0
+            if (count !== this.system.judgingsPerProject) {
+                issues.push(`Project ${i} is judged ${count} times (should be ${this.system.judgingsPerProject})`)
+                if (count < this.system.judgingsPerProject) {
+                    underJudgedProjects.push({ projectId: i, current: count, needed: this.system.judgingsPerProject - count })
+                }
+            }
+        }
+
+        return { issues, underJudgedProjects }
+    }
+
+    _fixUnderJudgedProjects(underJudgedProjects) {
+        console.log("\n[v0] Attempting to fix under-judged projects...")
+
+        for (const { projectId, needed } of underJudgedProjects) {
+            console.log(`[v0] Fixing Project ${projectId} (needs ${needed} more judgement(s))`)
+
+            let addedCount = 0
+
+            for (let judgeId = 0; judgeId < this.assignments.length && addedCount < needed; judgeId++) {
+                const judgeAssignments = this.assignments[judgeId]
+
+                // Check if this judge has already judged this project
+                if (judgeAssignments.includes(projectId)) continue
+
+                for (let slotIdx = 0; slotIdx < judgeAssignments.length && addedCount < needed; slotIdx++) {
+                    const currentAssignment = judgeAssignments[slotIdx]
+
+                    // Only check for collision, don't care if judge has too many projects
+                    let collision = false
+                    for (let otherJudgeId = 0; otherJudgeId < this.assignments.length; otherJudgeId++) {
+                        if (otherJudgeId === judgeId) continue
+                        if (this.assignments[otherJudgeId][slotIdx] === projectId) {
+                            collision = true
+                            break
+                        }
+                    }
+
+                    if (!collision) {
+                        if (currentAssignment === -1) {
+                            judgeAssignments[slotIdx] = projectId
+                        } else {
+                            // Add as a new slot at the end
+                            judgeAssignments.push(projectId)
+                        }
+                        addedCount++
+                        console.log(`  ✓ Assigned Project ${projectId} to Judge ${judgeId + 1} at Slot ${slotIdx + 1}`)
+                        break
+                    }
+                }
+
+                if (addedCount < needed && !judgeAssignments.includes(projectId)) {
+                    // One more collision check for a new slot
+                    let canAddNewSlot = true
+                    const newSlotIdx = judgeAssignments.length
+
+                    for (let otherJudgeId = 0; otherJudgeId < this.assignments.length; otherJudgeId++) {
+                        if (otherJudgeId === judgeId) continue
+                        if (this.assignments[otherJudgeId][newSlotIdx] === projectId) {
+                            canAddNewSlot = false
+                            break
+                        }
+                    }
+
+                    if (canAddNewSlot) {
+                        judgeAssignments.push(projectId)
+                        addedCount++
+                        console.log(`  ✓ Added Project ${projectId} to Judge ${judgeId + 1} as extra slot`)
+                    }
+                }
+            }
+
+            if (addedCount < needed) {
+                console.log(`  ⚠ Could only add ${addedCount}/${needed} missing judgement(s) for Project ${projectId}`)
+            }
+        }
+
+        return this._regenerateDataFrame()
+    }
+
+    _regenerateDataFrame() {
+        const maxTeams = Math.max(...this.assignments.map((arr) => arr.filter((x) => x !== -1).length))
+
         const csvData = []
 
         for (let i = 0; i < this.assignments.length; i++) {
@@ -535,53 +520,10 @@ class AssignmentGenerator {
         return csvData
     }
 
-    generateAssignments() {
-        this._createBalancedAssignments()
-        return this._createAssignmentDataFrame()
-    }
-}
-
-// ============================================================================
-// Assignment Verifier
-// ============================================================================
-
-class AssignmentVerifier {
-    constructor(data, system) {
-        this.data = data
-        this.system = system
-    }
-
-    _verifyJudgingCount() {
-        const projectCounts = {}
-
-        for (const row of this.data) {
-            for (const [key, value] of Object.entries(row)) {
-                if (key.startsWith("Slot") && value !== "No team for this time slot") {
-                    const match = value.match(/Table (\d+)\)/)
-                    if (match) {
-                        const tableNum = Number.parseInt(match[1])
-                        projectCounts[tableNum] = (projectCounts[tableNum] || 0) + 1
-                    }
-                }
-            }
-        }
-
-        const issues = []
-        for (let i = 1; i <= this.system.totalProjects; i++) {
-            const count = projectCounts[i] || 0
-            if (count !== this.system.judgingsPerProject) {
-                issues.push(`Project ${i} is judged ${count} times (should be ${this.system.judgingsPerProject})`)
-            }
-        }
-
-        return issues
-    }
-
     _verifySimultaneousJudging() {
         const issues = []
         const slotKeys = Object.keys(this.data[0]).filter((key) => key.startsWith("Slot"))
 
-        // Check each time slot
         for (const slotKey of slotKeys) {
             const tableNumbers = []
 
@@ -595,7 +537,6 @@ class AssignmentVerifier {
                 }
             }
 
-            // Check for duplicate table assignments in this slot
             const seen = new Set()
             const duplicates = new Set()
             for (const num of tableNumbers) {
@@ -619,7 +560,6 @@ class AssignmentVerifier {
         const issues = []
         const firstSlotTables = new Map()
 
-        // Get first slot (starting position) for each judge
         for (const row of this.data) {
             const firstSlot = row["Slot 1"]
             if (firstSlot && firstSlot !== "No team for this time slot") {
@@ -635,7 +575,6 @@ class AssignmentVerifier {
             }
         }
 
-        // Check for any judges starting at the same table
         for (const [tableNum, judges] of firstSlotTables.entries()) {
             if (judges.length > 1) {
                 issues.push(`Multiple judges start at Table ${tableNum}: ${judges.join(", ")}`)
@@ -673,12 +612,26 @@ class AssignmentVerifier {
 
     verifyAll() {
         const issues = []
-        issues.push(...this._verifyJudgingCount())
+        const judgingResult = this._verifyJudgingCount()
+        issues.push(...judgingResult.issues)
         issues.push(...this._verifySimultaneousJudging())
         issues.push(...this._verifyNoJudgesStartAtSameTable())
         issues.push(...this._verifyJudgeWorkload())
 
-        return { success: issues.length === 0, issues }
+        if (judgingResult.underJudgedProjects.length > 0) {
+            const fixedData = this._fixUnderJudgedProjects(judgingResult.underJudgedProjects)
+
+            // Re-verify after fix-up
+            this.data = fixedData
+            const recheck = this._verifyJudgingCount()
+
+            if (recheck.underJudgedProjects.length === 0) {
+                console.log("[v0] ✓ Successfully fixed all under-judged projects!")
+                return { success: true, issues: [], data: fixedData }
+            }
+        }
+
+        return { success: issues.length === 0, issues, data: this.data }
     }
 }
 
@@ -692,7 +645,7 @@ function main({
     numRooms = 4,
     numJudges = 20,
     totalProjects = 50,
-    roomCapacities = null, // New parameter for variable room capacities
+    roomCapacities = null,
     maxAttempts = 10,
     saveToFile = true,
     outputFile = "assignments.csv",
@@ -711,7 +664,6 @@ function main({
     console.log(`  Max Attempts: ${maxAttempts}`)
     console.log(`  Save to File: ${saveToFile}`)
 
-    // Initialize system
     const system = new JudgingSystem(numRooms, judgingsPerProject, demoMode, numJudges, totalProjects, roomCapacities)
 
     console.log(`\n[v0] Initialized system with ${system.numJudges} judges and ${system.totalProjects} projects`)
@@ -720,7 +672,6 @@ function main({
         console.log(`  Room ${room.roomId}: ${room.projects.length} projects, capacity: ${room.capacity} projects`)
     }
 
-    // Generate and verify assignments with retries
     let attempt = 1
     let success = false
     let finalData = null
@@ -731,7 +682,7 @@ function main({
         const generator = new AssignmentGenerator(system)
         const data = generator.generateAssignments()
 
-        const verifier = new AssignmentVerifier(data, system)
+        const verifier = new AssignmentVerifier(data, system, generator.assignments)
         const result = verifier.verifyAll()
 
         success = result.success
@@ -742,7 +693,7 @@ function main({
             console.log("  ✓ No judges at same table simultaneously")
             console.log("  ✓ No judges start at same table")
             console.log("  ✓ Workload balanced across judges")
-            finalData = data
+            finalData = result.data || data // Use fixed data if available
         } else {
             console.log("\n[v0] Warning: Issues found in assignments:")
             for (const issue of result.issues) {
@@ -759,7 +710,6 @@ function main({
         attempt++
     }
 
-    // Save final assignments
     if (success && saveToFile && finalData) {
         const csvContent = stringify(finalData, { header: true })
         fs.writeFileSync(outputFile, csvContent)
@@ -775,15 +725,16 @@ function main({
 // Export and Execute
 // ============================================================================
 
+
 // Example usage with feature flags
 main({
     demoMode: false, // Toggle demo mode on/off
     judgingsPerProject: 3, // Number of times each project is judged
-    numRooms: 4, // Number of judging rooms
-    numJudges: 3, // Number of judges (used in demo mode)
-    totalProjects: 12, // Total number of projects (used in demo mode)
+    numRooms: 1, // Number of judging rooms
+    numJudges: 27, // Number of judges (used in demo mode)
+    totalProjects: 50, // Total number of projects (used in demo mode)
     // Rooms with more projects can accommodate more judges at once
-    roomCapacities: [15, 12, 13, 10], // Optional: Projects per room (if omitted, divided evenly)
+    roomCapacities: [200], // Optional: Projects per room (if omitted, divided evenly)
     maxAttempts: 10, // Maximum retry attempts
     saveToFile: true, // Save results to CSV file
     outputFile: "assignments.csv", // Output file name
